@@ -165,7 +165,7 @@ func parseRetryAfter(v string) time.Duration {
 func (c *Client) once(ctx context.Context, r request, payload []byte, attempt int) (out *response, err error) {
 	ctx, sp := c.startSpan(ctx, r, attempt)
 	code := 0
-	defer func() { endSpan(sp, code, err) }()
+	defer func() { endSpan(sp, r, code, err) }()
 	var body io.Reader
 	if payload != nil {
 		body = bytes.NewReader(payload)

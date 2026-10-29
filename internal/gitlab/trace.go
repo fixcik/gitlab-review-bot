@@ -3,6 +3,7 @@ package gitlab
 import (
 	"context"
 	"errors"
+	"net/http"
 	"strconv"
 	"strings"
 
@@ -37,7 +38,7 @@ func (c *Client) startSpan(ctx context.Context, r request, attempt int) (context
 	return tracing.Start(ctx, r.method+" "+tmpl, tracing.WithKind(tracing.KindClient), tracing.WithAttrs(attrs...))
 }
 
-func endSpan(sp *tracing.Span, code int, err error) {
+func endSpan(sp *tracing.Span, r request, code int, err error) {
 	if sp == nil {
 		return
 	}
@@ -45,6 +46,9 @@ func endSpan(sp *tracing.Span, code int, err error) {
 		sp.SetAttr(tracing.Int("http.response.status_code", code))
 	}
 	switch {
+	case isMissingFile(r, code):
+		// The file is simply not there (optional files such as
+		// .reviewbot.yaml): an answer, not a failure. The status stays.
 	case code >= 400:
 		sp.SetAttr(tracing.String("error.type", strconv.Itoa(code)))
 		sp.SetStatus(tracing.StatusError, "HTTP "+strconv.Itoa(code))
@@ -52,6 +56,14 @@ func endSpan(sp *tracing.Span, code int, err error) {
 		sp.RecordError(err, errorClass(err))
 	}
 	sp.End()
+}
+
+// isMissingFile reports a 404 of the repository files API: callers ask for
+// optional files, so the span of that answer is not an error (a 404 of any
+// other endpoint, and any other status, still is).
+func isMissingFile(r request, code int) bool {
+	return code == http.StatusNotFound && r.method == http.MethodGet &&
+		strings.Contains(r.u.EscapedPath(), "/repository/files/")
 }
 
 // errorClass is the error.type of a request that got no HTTP status.
