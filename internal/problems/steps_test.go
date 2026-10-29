@@ -33,6 +33,7 @@ func TestImpacts(t *testing.T) {
 		problems.LabelsFailed: problems.ImpactNone, problems.ReactionsFailed: problems.ImpactNone,
 		problems.AdvisorUnavailable: problems.ImpactNone, problems.SysmapFailed: problems.ImpactNone,
 		problems.DeepReviewUnavailable: problems.ImpactNone, problems.DescriptionSummaryFailed: problems.ImpactNone,
+		problems.SandboxImageMissing: problems.ImpactBreaks,
 	} {
 		if got := problems.InfoOf(k).Impact; got != want {
 			t.Errorf("%s: impact %s, want %s", k, got, want)

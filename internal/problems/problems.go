@@ -38,14 +38,17 @@ const (
 	// review finished without the second opinion.
 	DeepReviewUnavailable Kind = "deep_review_unavailable"
 	SysmapFailed          Kind = "sysmap_failed"
-	DiffTruncated         Kind = "diff_truncated"
-	InvalidOutput         Kind = "invalid_output"
-	ClaudeAuthFailed      Kind = "claude_auth_failed"
-	EvidenceFailed        Kind = "evidence_failed"
-	MCPFailed             Kind = "mcp_failed"
-	ReactionsFailed       Kind = "reactions_failed"
-	LabelsFailed          Kind = "labels_failed"
-	VerifyFailed          Kind = "verify_failed"
+	// SandboxImageMissing: the sandbox image is not on the host and the
+	// bot's own pull at the start failed (service-wide, no project).
+	SandboxImageMissing Kind = "sandbox_image_missing"
+	DiffTruncated       Kind = "diff_truncated"
+	InvalidOutput       Kind = "invalid_output"
+	ClaudeAuthFailed    Kind = "claude_auth_failed"
+	EvidenceFailed      Kind = "evidence_failed"
+	MCPFailed           Kind = "mcp_failed"
+	ReactionsFailed     Kind = "reactions_failed"
+	LabelsFailed        Kind = "labels_failed"
+	VerifyFailed        Kind = "verify_failed"
 	// CIFetchFailed: the CI failure digest could not read a pipeline's
 	// jobs, a job log or the test report (review.ci).
 	CIFetchFailed Kind = "ci_fetch_failed"
@@ -127,6 +130,8 @@ var kinds = []KindInfo{
 		Hint: "Токен бота получил 403/404 на изменение описания MR (нужна роль Developer или автор MR): задайте GITLAB_SERVICE_TOKEN или выключите `review.description_summary`; ревью идёт без блока в описании."},
 	{Kind: SysmapFailed, Title: "Карта системы проверена не полностью", Action: "Дайте карте системы больше бюджета", Severity: SevInfo, Impact: ImpactNone,
 		Hint: "Бюджет извлечения исчерпан или сканирование упало: см. /map, `review.sysmap.max_runs_per_hour` и `deps_max_runs_per_hour`."},
+	{Kind: SandboxImageMissing, Title: "Образ песочницы не скачан", Action: "Скачайте или соберите образ песочницы", Severity: SevError, Impact: ImpactBreaks,
+		Hint: "Бот при старте не смог скачать `sandbox.image` (причина — в описании проблемы, повтор раз в час): без образа ревью не запускаются. Сделайте пакет ghcr.io публичным, или выполните на хосте `docker compose pull` (после `docker login ghcr.io` с PAT `read:packages`), или соберите `docker compose build`; проверка — `reviewbot doctor`. `docker login` на хосте не действует на скачивание из контейнера бота."},
 	{Kind: DiffTruncated, Title: "Дифф обрезан — ревью частичное", Action: "Разбейте MR или поднимите лимит диффа", Severity: SevWarn, Impact: ImpactPartial,
 		Hint: "MR больше `review.max_diff_bytes` / `max_files`: разбейте MR или поднимите лимиты; часть изменений не просмотрена."},
 	{Kind: InvalidOutput, Title: "Ответ модели не разобран", Action: "Разберите ответ модели в транскрипте", Severity: SevError, Impact: ImpactBreaks,

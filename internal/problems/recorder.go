@@ -234,6 +234,18 @@ func (s *Service) Record(ctx context.Context, p Problem) {
 	s.persist(ctx, p)
 }
 
+// ResolveOutside marks a problem recorded outside a job (Record) as fixed:
+// background work saw its cause gone. Best effort, like Record.
+func (s *Service) ResolveOutside(ctx context.Context, kind Kind, project, subject string) {
+	if s == nil || s.o.Store == nil {
+		return
+	}
+	fp := Fingerprint(kind, project, CleanText(subject, MaxSubjectRunes))
+	if _, err := s.o.Store.ResolveProblem(ctx, fp, s.o.Now()); err != nil {
+		s.o.Logger.Warn("problems: resolve", "kind", kind, "err", err)
+	}
+}
+
 // clean scrubs and caps the texts of p.
 func (s *Service) clean(p Problem) Problem {
 	if p.Source == "" {

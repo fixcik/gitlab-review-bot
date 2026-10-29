@@ -20,6 +20,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/fixcik/gitlab-review-bot/internal/doctor"
@@ -67,6 +68,9 @@ type Options struct {
 	// NonInteractive); Up runs `docker compose pull` and `up -d` without
 	// asking.
 	Force, Up bool
+	// NoPull: do not pull a missing sandbox image (by default init pulls
+	// it itself in the sandbox step).
+	NoPull bool
 	// HaveTTY: stdin is a terminal (interactive mode needs one).
 	HaveTTY bool
 	// Flag values; empty = not given.
@@ -81,8 +85,11 @@ type System struct {
 	// Stream runs a long command (docker compose pull/up) with its output
 	// shown to the user.
 	Stream func(ctx context.Context, name string, args ...string) error
-	HTTP   *http.Client
-	GOOS   string
+	// Interrupt delivers Ctrl-C during a long command (the image pull);
+	// nil = never.
+	Interrupt <-chan os.Signal
+	HTTP      *http.Client
+	GOOS      string
 	// SocketGID is the group of /var/run/docker.sock (Linux).
 	SocketGID func() (string, error)
 	Rand      io.Reader
@@ -113,7 +120,12 @@ type wizard struct {
 	// written: config.yaml and .env are on disk (an interrupt after that
 	// must not say "nothing written").
 	written bool
+	// interrupted: Ctrl-C during the image pull.
+	interrupted atomic.Bool
 }
+
+// pullTimeout bounds `docker pull` of the sandbox image (~0.6 GB).
+const pullTimeout = 20 * time.Minute
 
 // Run is `reviewbot init`; old holds the values read from the existing
 // config.yaml and .env (the defaults of the questions).
@@ -352,7 +364,12 @@ func (w *wizard) collectFlags() error {
 	// image does not block them.
 	rs := append(w.gitlab(), w.claude()...)
 	w.printf("Проверки:\n")
-	w.show(append(rs, w.docker()...))
+	w.show(rs)
+	dr, err := w.docker()
+	if err != nil {
+		return err
+	}
+	w.show(dr)
 	w.fails = countFails(rs)
 	return nil
 }
@@ -378,9 +395,42 @@ func (w *wizard) claude() []doctor.Result {
 }
 
 // docker: daemon and sandbox image (the network is created by compose).
-func (w *wizard) docker() []doctor.Result {
-	rs := doctor.Docker(doctor.DockerInput{Image: w.v.SandboxImage, Network: defaultNetwork, Exec: w.sys.Exec, GOOS: w.sys.GOOS}).Check(w.ctx)
-	return pick(rs, "docker.access", "docker.sandbox_image")
+// A missing image is pulled here unless NoPull; it never blocks writing
+// the files, so its failure is a warning. Ctrl-C during the pull returns
+// ErrInterrupted.
+func (w *wizard) docker() ([]doctor.Result, error) {
+	in := doctor.DockerInput{Image: w.v.SandboxImage, Network: defaultNetwork, Exec: w.sys.Exec, GOOS: w.sys.GOOS}
+	if !w.opt.NoPull {
+		in.Pull = w.pull
+	}
+	rs := pick(doctor.Docker(in).Check(w.ctx), "docker.access", "docker.sandbox_image")
+	if w.interrupted.Load() {
+		return nil, ErrInterrupted
+	}
+	for i := range rs {
+		if rs[i].ID == "docker.sandbox_image" && rs[i].Status == doctor.Fail {
+			rs[i].Status = doctor.Warn
+		}
+	}
+	return rs, nil
+}
+
+// pull runs `docker pull` with its progress shown; Ctrl-C stops it.
+func (w *wizard) pull(ctx context.Context, image string) error {
+	w.printf("     … скачиваю образ %s (docker pull; Ctrl-C — прервать)\n", image)
+	ctx, cancel := context.WithTimeout(ctx, pullTimeout)
+	defer cancel()
+	done := make(chan struct{})
+	defer close(done)
+	go func() {
+		select {
+		case <-w.sys.Interrupt:
+			w.interrupted.Store(true)
+			cancel()
+		case <-done:
+		}
+	}()
+	return w.sys.Stream(ctx, "docker", "pull", image)
 }
 
 // retry: a step whose check failed asks to enter the value again.
@@ -513,7 +563,10 @@ func (w *wizard) collectInteractive() error {
 		return fmt.Errorf("каталог данных должен быть абсолютным путём: %s", d)
 	}
 	v.DataDir = d
-	dr := w.docker()
+	dr, err := w.docker()
+	if err != nil {
+		return err
+	}
 	w.show(dr)
 	return nil
 }

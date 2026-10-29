@@ -232,3 +232,45 @@ func TestRegisterSetupWeb(t *testing.T) {
 		}
 	}
 }
+
+// doctor reads only; -pull downloads a missing sandbox image (progress on
+// stderr, the report stays clean JSON).
+func TestRunDoctorPull(t *testing.T) {
+	clearSecretsEnv(t)
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.yaml")
+	os.WriteFile(cfgPath, []byte("sandbox:\n  image: \"ghcr.io/fixcik/gitlab-review-bot-sandbox:latest\"\n  egress_proxy: \"\"\n"), 0o644)
+	missing := func(_ context.Context, name string, args ...string) ([]byte, error) {
+		k := name + " " + strings.Join(args, " ")
+		switch {
+		case strings.HasPrefix(k, "docker image inspect"):
+			return []byte("No such image"), errors.New("exit 1")
+		case strings.HasPrefix(k, "docker pull"):
+			t.Errorf("pull through the read-only runner: %s", k)
+		}
+		return fakeDocker(context.Background(), name, args...)
+	}
+	var pulled []string
+	deps := doctorDeps{exec: missing, pull: func(_ context.Context, image string) error { pulled = append(pulled, image); return nil }}
+	var out, errb bytes.Buffer
+	runDoctor(context.Background(), []string{"-config", cfgPath, "-env", ""}, &out, &errb, deps)
+	if len(pulled) != 0 || !strings.Contains(out.String(), "reviewbot doctor --pull") {
+		t.Fatalf("without -pull: pulled %v\n%s", pulled, out.String())
+	}
+	out.Reset()
+	runDoctor(context.Background(), []string{"-config", cfgPath, "-env", "", "-pull", "-json"}, &out, &errb, deps)
+	var rep doctor.Report
+	if err := json.Unmarshal(out.Bytes(), &rep); err != nil || len(pulled) != 1 || pulled[0] != "ghcr.io/fixcik/gitlab-review-bot-sandbox:latest" {
+		t.Fatalf("-pull: %v %v\n%s", err, pulled, out.String())
+	}
+	for _, r := range rep.Results {
+		if r.ID == "docker.sandbox_image" && (r.Status != doctor.OK || !strings.Contains(r.Detail, "скачан")) {
+			t.Fatalf("image %+v", r)
+		}
+	}
+	// The real pull streams to the given writer.
+	var progress bytes.Buffer
+	if err := dockerPull(&progress, "true")(context.Background(), "img"); err != nil {
+		t.Fatal(err)
+	}
+}

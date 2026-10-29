@@ -84,7 +84,7 @@ func TestKinds(t *testing.T) {
 			t.Errorf("steps for an unknown kind %s", k)
 		}
 	}
-	if len(seen) != 27 {
+	if len(seen) != 28 {
 		t.Errorf("kinds: %d", len(seen))
 	}
 	if got := strings.Join(ModelNames(), ","); got != "tool_failed,missing_dependency,no_access,too_large,config_unclear,other" {
@@ -496,5 +496,29 @@ func TestResolve(t *testing.T) {
 	svc.Finish(ctx4, run4)
 	if !st.rows[fp].ResolvedAt.IsZero() {
 		t.Fatal("a recurrence did not make the problem active")
+	}
+}
+
+// Background work (no job) records and resolves a service-wide problem.
+func TestServiceRecordAndResolveOutsideAJob(t *testing.T) {
+	st, c := newMemStore(), &clock{time.Date(2026, 10, 26, 12, 0, 0, 0, time.UTC)}
+	svc, _ := testService(st, c)
+	p := Problem{Kind: SandboxImageMissing, Subject: "ghcr.io/fixcik/gitlab-review-bot-sandbox:latest", Detail: "unauthorized"}
+	svc.Record(context.Background(), p)
+	fp := Fingerprint(SandboxImageMissing, "", p.Subject)
+	if r := st.rows[fp]; r == nil || !r.ResolvedAt.IsZero() {
+		t.Fatalf("recorded %+v", st.rows)
+	}
+	c.t = c.t.Add(time.Hour)
+	svc.ResolveOutside(context.Background(), SandboxImageMissing, "", p.Subject)
+	if r := st.rows[fp]; !r.ResolvedAt.Equal(c.t) {
+		t.Fatalf("resolved %+v", r)
+	}
+	svc.ResolveOutside(context.Background(), SandboxImageMissing, "", "never recorded") // no row: nothing to do
+	var nilSvc *Service
+	nilSvc.ResolveOutside(context.Background(), SandboxImageMissing, "", "x") // a nil service is a no-op
+	New(Options{}).ResolveOutside(context.Background(), SandboxImageMissing, "", "x")
+	if info := InfoOf(SandboxImageMissing); info.Impact != ImpactBreaks || info.Severity != SevError || !strings.Contains(info.Hint, "docker compose pull") {
+		t.Fatalf("kind %+v", info)
 	}
 }

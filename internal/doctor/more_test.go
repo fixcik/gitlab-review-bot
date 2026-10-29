@@ -184,3 +184,35 @@ func TestGitLabCAFile(t *testing.T) {
 		}
 	}
 }
+
+// Pull: only a missing image is pulled; a pulled image is OK; a failed
+// pull keeps the reason and the hint. Without Pull nothing changes state
+// and the hint names `reviewbot doctor --pull`.
+func TestDockerPull(t *testing.T) {
+	const img = "ghcr.io/fixcik/gitlab-review-bot-sandbox:latest"
+	var pulled []string
+	pull := func(err error) func(context.Context, string) error {
+		return func(_ context.Context, image string) error { pulled = append(pulled, image); return err }
+	}
+	present := fakeExec{"docker version": {out: "27"}, "docker image inspect": {out: "sha256:x"}, "docker network inspect": {out: "[]"}}
+	m := byID(Run(context.Background(), t0, Docker(DockerInput{Image: img, Network: "n", Exec: present.run, Pull: pull(nil)})))
+	if len(pulled) != 0 || m["docker.sandbox_image"].Status != OK {
+		t.Fatalf("present: pulled %v, %+v", pulled, m["docker.sandbox_image"])
+	}
+	missing := fakeExec{"docker version": {out: "27"}, "docker image inspect": {err: errors.New("no such image")}, "docker manifest inspect": {out: "{}"},
+		"docker network inspect": {out: "[]"}}
+	m = byID(Run(context.Background(), t0, Docker(DockerInput{Image: img, Network: "n", Exec: missing.run})))
+	if r := m["docker.sandbox_image"]; r.Status != Fail || !strings.Contains(r.Action, "reviewbot doctor --pull") {
+		t.Fatalf("no pull: %+v", r)
+	}
+	m = byID(Run(context.Background(), t0, Docker(DockerInput{Image: img, Network: "n", Exec: missing.run, Pull: pull(nil)})))
+	if r := m["docker.sandbox_image"]; len(pulled) != 1 || pulled[0] != img || r.Status != OK || !strings.Contains(r.Detail, "скачан") || r.Action != "" {
+		t.Fatalf("pulled: %v %+v", pulled, r)
+	}
+	denied := fakeExec{"docker version": {out: "27"}, "docker image inspect": {err: errors.New("no such image")},
+		"docker manifest inspect": {out: "unauthorized", err: errors.New("exit 1")}, "docker network inspect": {out: "[]"}}
+	m = byID(Run(context.Background(), t0, Docker(DockerInput{Image: img, Network: "n", Exec: denied.run, Pull: pull(errors.New("exit status 1"))})))
+	if r := m["docker.sandbox_image"]; r.Status != Fail || !strings.Contains(r.Detail, "docker pull не удался") || !strings.Contains(r.Action, "docker login ghcr.io") {
+		t.Fatalf("pull failed: %+v", r)
+	}
+}

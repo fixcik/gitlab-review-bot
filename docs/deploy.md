@@ -9,7 +9,7 @@
 | `reviewbot sync-hooks -config config.yaml [-dry-run]` | разовая синхронизация вебхуков, см. [setup-gitlab.md](setup-gitlab.md#автоматически) |
 | `reviewbot runs …`, `reviewbot runs show <id>` | диагностика запусков, см. [usage-and-diagnostics.md](usage-and-diagnostics.md#reviewbot-runs) |
 | `reviewbot init [-non-interactive]` | первая настройка: спрашивает, проверяет и пишет `config.yaml` и `.env`, см. [ниже](#быстрый-старт-reviewbot-init) |
-| `reviewbot doctor [-config config.yaml] [-env .env] [-json]` | проверки настройки (GitLab, Docker, egress, Claude), см. [ниже](#проверка-reviewbot-doctor-и-setup) |
+| `reviewbot doctor [-config config.yaml] [-env .env] [-json] [-pull]` | проверки настройки (GitLab, Docker, egress, Claude), см. [ниже](#проверка-reviewbot-doctor-и-setup) |
 
 Схема: бот принимает вебхуки GitLab, держит очередь и SQLite, а для каждого запуска
 Claude и для каждой проверки бота стартует отдельный контейнер из образа песочницы
@@ -135,7 +135,12 @@ docker compose up -d      # init предлагает выполнить pull и
 `init` спрашивает адрес GitLab и группы, токены (ввод скрыт, в историю оболочки не
 попадают), способ входа в Claude, режим событий (вебхуки с догоняющим опросом или только
 опрос API) и каталог данных. Каждый шаг сразу проверяется (как `reviewbot doctor`): роль
-бота в группах, scope токенов, доступ к Docker, наличие образа песочницы. Затем:
+бота в группах, scope токенов, доступ к Docker, наличие образа песочницы. Если образа
+песочницы нет локально, `init` сам выполняет `docker pull` (без вопроса, с прогрессом;
+Ctrl-C прерывает, ничего не записывая; `-no-pull` — пропустить, в том числе в
+`-non-interactive`). Неудачный pull (unauthorized, нет тега, нет сети) не мешает записи
+файлов: шаг показывает «!» с причиной и подсказкой (`docker login ghcr.io` или
+`docker compose build`). Затем:
 
 - `config.yaml` — только несекретное (`gitlab.url`, `gitlab.groups`, `gitlab.events`,
   `gitlab.webhook_url`, `data_dir`, `sandbox.image`); новый файл — из шаблона со
@@ -147,8 +152,8 @@ docker compose up -d      # init предлагает выполнить pull и
   `REVIEWBOT_DATA_DIR`, `REVIEWBOT_SANDBOX_IMAGE`, на Linux `DOCKER_GID` — группа
   `/var/run/docker.sock`), права 600, чужие ключи сохраняются. В каталоге под git
   `init` пишет `.env`, только если он в `.gitignore`;
-- предлагает `docker compose pull` (если реестр отказал — `docker compose build`) и
-  `docker compose up -d`.
+- предлагает `docker compose pull` (образ бота и egress; если реестр отказал —
+  `docker compose build`) и `docker compose up -d`.
 
 Повторный запуск берёт текущие значения как умолчания (Enter — оставить токен).
 Секреты не печатаются нигде: только «принят» или причина отказа.
@@ -164,7 +169,7 @@ GITLAB_TOKEN=... CLAUDE_CODE_OAUTH_TOKEN=... reviewbot init -non-interactive \
 ```
 
 Флаги: `-config`, `-env`, `-gitlab-url`, `-groups`, `-events webhook|poll|both`,
-`-webhook-url`, `-data-dir`, `-sandbox-image`, `-force`, `-up`; `-repo-config` печатает
+`-webhook-url`, `-data-dir`, `-sandbox-image`, `-force`, `-up`, `-no-pull`; `-repo-config` печатает
 заготовку `.reviewbot.yaml`. Бот-аккаунт и токены `init` не создаёт
 ([setup-gitlab.md](setup-gitlab.md)).
 
@@ -198,6 +203,18 @@ not exist` (монтирование с `create_host_path: false`), а не со
 allowlist и `CONNECT api.anthropic.com:443` через egress-прокси, формат токена Claude
 (живой вызов платный и делается на первом ревью). Каждая проблема — с причиной и
 действием. Код выхода 1, если есть ошибка; `-json` — тот же отчёт в JSON.
+
+doctor только читает. Единственное исключение — `-pull`: отсутствующий образ песочницы
+скачивается (`docker pull`, прогресс — в stderr, отчёт остаётся чистым), и проверка
+показывает результат. Без `-pull` подсказка к ненайденному образу —
+`reviewbot doctor --pull` (или `docker compose pull` / `docker compose build`).
+
+Сам бот (`serve`, `sandbox.mode: docker`) при старте проверяет образ песочницы и, если его
+нет, скачивает в фоне, не задерживая старт. Не вышло — запись в логе и проблема
+`sandbox_image_missing` на `/problems`, повтор раз в час; после удачного pull проблема
+отмечается исправленной. Скачивание идёт с учётными данными docker внутри контейнера
+бота: `docker login` на хосте на него не действует — для приватного пакета выполните
+`docker compose pull` на хосте или сделайте пакет публичным.
 
 К GitLab — только `GET` (с внутренним CA из `gitlab.ca_file`, как у бота), к Docker — `docker version`, `docker image inspect`,
 `docker manifest inspect`, `docker network inspect`. Egress-прокси виден только из

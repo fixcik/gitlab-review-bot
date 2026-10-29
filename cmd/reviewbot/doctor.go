@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"runtime"
 	"time"
 
@@ -55,8 +56,9 @@ func loadDotenv(path string) error {
 	return nil
 }
 
-// runDoctor is `reviewbot doctor [-config config.yaml] [-env .env] [-json]`:
-// the setup checks on the given config, read-only. Exit code 0 = no
+// runDoctor is `reviewbot doctor [-config config.yaml] [-env .env] [-json]
+// [-pull]`: the setup checks on the given config, read-only; -pull is the
+// one exception, it downloads a missing sandbox image. Exit code 0 = no
 // failed check (warnings allowed), 1 = a check failed, 2 = usage error or
 // the config cannot be read.
 func runDoctor(ctx context.Context, args []string, stdout, stderr io.Writer, deps doctorDeps) int {
@@ -65,6 +67,7 @@ func runDoctor(ctx context.Context, args []string, stdout, stderr io.Writer, dep
 	cfgPath := fs.String("config", "config.yaml", "path to config.yaml")
 	envPath := fs.String("env", ".env", "the .env with the secrets (missing = only the environment)")
 	asJSON := fs.Bool("json", false, "print the report as JSON")
+	pull := fs.Bool("pull", false, "download a missing sandbox image (docker pull; progress on stderr)")
 	if err := fs.Parse(args); err != nil || fs.NArg() > 0 {
 		return 2
 	}
@@ -83,7 +86,15 @@ func runDoctor(ctx context.Context, args []string, stdout, stderr io.Writer, dep
 	}
 	in := doctorInputs(*cfgPath, cfg, cfg.Validate(), os.Getenv)
 	deps.apply(&in)
-	ctx, cancel := context.WithTimeout(ctx, doctorTimeout)
+	timeout := doctorTimeout
+	if *pull {
+		in.Docker.Pull = deps.pull
+		if in.Docker.Pull == nil {
+			in.Docker.Pull = dockerPull(stderr, "docker")
+		}
+		timeout += sandboxPullTimeout
+	}
+	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	rep := doctor.Run(ctx, time.Now(), in.Providers()...)
 	if *asJSON {
@@ -100,6 +111,19 @@ func runDoctor(ctx context.Context, args []string, stdout, stderr io.Writer, dep
 type doctorDeps struct {
 	exec doctor.Exec
 	dial func(ctx context.Context, hostport string) (string, error)
+	pull func(ctx context.Context, image string) error
+}
+
+// sandboxPullTimeout bounds one `docker pull` of the sandbox image.
+const sandboxPullTimeout = 20 * time.Minute
+
+// dockerPull runs `<docker> pull <image>` with its progress written to w.
+func dockerPull(w io.Writer, docker string) func(ctx context.Context, image string) error {
+	return func(ctx context.Context, image string) error {
+		c := exec.CommandContext(ctx, docker, "pull", image)
+		c.Stdout, c.Stderr = w, w
+		return c.Run()
+	}
 }
 
 func (d doctorDeps) apply(in *doctor.Inputs) {
