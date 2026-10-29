@@ -3,7 +3,7 @@
 [![ci](https://github.com/fixcik/gitlab-review-bot/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/fixcik/gitlab-review-bot/actions/workflows/ci.yml)
 [![coverage](https://github.com/fixcik/gitlab-review-bot/raw/badges/coverage.svg)](https://github.com/fixcik/gitlab-review-bot/actions/workflows/ci.yml)
 
-https://github.com/user-attachments/assets/f5fe63df-38bb-400a-9b71-0f77039ec70f
+https://github.com/user-attachments/assets/40ce7031-a16a-46c9-9049-1293e9aac449
 
 Бот, который ревьюит merge request'ы в self-managed GitLab (Free/CE). На каждый push он
 читает изменения, оставляет в MR замечания к строкам кода и пишет короткое саммари. Ревью
