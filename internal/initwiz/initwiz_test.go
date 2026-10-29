@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -91,6 +92,8 @@ type fakeSys struct {
 	fail    map[string]string // command prefix -> output of a failure
 	streams []string
 	streamE map[string]error
+	// block: streams that run until their context ends (a long pull).
+	block map[string]bool
 }
 
 func (f *fakeSys) exec(_ context.Context, name string, args ...string) ([]byte, error) {
@@ -110,9 +113,13 @@ func (f *fakeSys) exec(_ context.Context, name string, args ...string) ([]byte, 
 	return nil, nil
 }
 
-func (f *fakeSys) stream(_ context.Context, name string, args ...string) error {
+func (f *fakeSys) stream(ctx context.Context, name string, args ...string) error {
 	k := name + " " + strings.Join(args, " ")
 	f.streams = append(f.streams, k)
+	if f.block[k] {
+		<-ctx.Done()
+		return ctx.Err()
+	}
 	return f.streamE[k]
 }
 
@@ -166,7 +173,7 @@ func TestInteractiveNewInstall(t *testing.T) {
 	noSecrets(t, o)
 	for _, want := range []string{"1/6  GitLab", "✓ адрес: " + gl.URL + " отвечает", "пользователь reviewbot, scope api", "Reporter (нужна ровно эта)",
 		"роль служебного токена в backend: Maintainer", "CLAUDE_CODE_OAUTH_TOKEN принят (формат)", "секрет вебхука сгенерирован",
-		"✓ доступ к Docker", "✗ образ песочницы", "docker compose pull", "Записано: config.yaml (без секретов), .env (права 600)",
+		"✓ доступ к Docker", "скачиваю образ " + defaultImage, "✓ образ песочницы: " + defaultImage + " скачан", "Записано: config.yaml (без секретов), .env (права 600)",
 		"sudo mkdir -p /var/lib/reviewbot", "reviewbot sync-hooks", "reviewbot init --repo-config"} {
 		if !strings.Contains(o, want) {
 			t.Errorf("output lacks %q:\n%s", want, o)
@@ -653,3 +660,90 @@ func TestTTY(t *testing.T) {
 type errReader struct{}
 
 func (errReader) Read([]byte) (int, error) { return 0, errors.New("broken") }
+
+// The sandbox image: init pulls a missing one itself (no question), not a
+// present one, not with -no-pull; a failed pull does not stop the files
+// from being written and shows as a warning; Ctrl-C during the pull ends
+// init with nothing written.
+func TestSandboxImagePull(t *testing.T) {
+	gl := fakeGitLab(t)
+	env := map[string]string{"GITLAB_TOKEN": botTok, "CLAUDE_CODE_OAUTH_TOKEN": oat}
+	pullCmd := "docker pull " + defaultImage
+	run := func(t *testing.T, fs *fakeSys, mod func(*Options, *System)) (int, string) {
+		t.Helper()
+		t.Chdir(t.TempDir())
+		o := opts("")
+		o.NonInteractive, o.GitLabURL, o.Groups, o.Events = true, gl.URL, "backend", "poll"
+		sys := fs.sys(env)
+		if mod != nil {
+			mod(&o, &sys)
+		}
+		var out bytes.Buffer
+		code := Run(context.Background(), o, Values{}, nil, &out, sys)
+		noSecrets(t, out.String())
+		return code, out.String()
+	}
+	missing := map[string]string{"docker image inspect": "No such image"}
+	t.Run("missing: pulled", func(t *testing.T) {
+		fs := &fakeSys{fail: missing}
+		code, out := run(t, fs, nil)
+		if code != ExitOK || !slices.Contains(fs.streams, pullCmd) || !strings.Contains(out, "скачиваю образ "+defaultImage) ||
+			!strings.Contains(out, "✓ образ песочницы: "+defaultImage+" скачан") {
+			t.Fatalf("code %d streams %v\n%s", code, fs.streams, out)
+		}
+		if strings.Index(out, "скачиваю образ") > strings.Index(out, "Записано:") {
+			t.Fatalf("the image is pulled in the Docker step, before writing:\n%s", out)
+		}
+	})
+	t.Run("present: not pulled", func(t *testing.T) {
+		fs := &fakeSys{}
+		if code, out := run(t, fs, nil); code != ExitOK || slices.Contains(fs.streams, pullCmd) || strings.Contains(out, "скачиваю") {
+			t.Fatalf("code %d streams %v\n%s", code, fs.streams, out)
+		}
+	})
+	t.Run("-no-pull", func(t *testing.T) {
+		fs := &fakeSys{fail: missing}
+		code, out := run(t, fs, func(o *Options, _ *System) { o.NoPull = true })
+		if code != ExitOK || slices.Contains(fs.streams, pullCmd) || !strings.Contains(out, "! образ песочницы") || !strings.Contains(out, "reviewbot doctor --pull") {
+			t.Fatalf("code %d streams %v\n%s", code, fs.streams, out)
+		}
+	})
+	t.Run("pull fails: files written, a warning", func(t *testing.T) {
+		fs := &fakeSys{fail: map[string]string{"docker image inspect": "No such image", "docker manifest inspect": "unauthorized: authentication required"},
+			streamE: map[string]error{pullCmd: errors.New("exit status 1")}}
+		code, out := run(t, fs, nil)
+		if code != ExitOK || strings.Contains(out, "✗ образ песочницы") || !strings.Contains(out, "! образ песочницы") ||
+			!strings.Contains(out, "docker pull не удался") || !strings.Contains(out, "docker login ghcr.io") || !strings.Contains(out, "Записано:") {
+			t.Fatalf("code %d\n%s", code, out)
+		}
+		if _, err := os.Stat(".env"); err != nil {
+			t.Fatal(".env not written after a failed pull")
+		}
+	})
+	t.Run("Ctrl-C during the pull", func(t *testing.T) {
+		fs := &fakeSys{fail: missing, block: map[string]bool{pullCmd: true}}
+		sig := make(chan os.Signal, 1)
+		sig <- os.Interrupt
+		code, out := run(t, fs, func(_ *Options, s *System) { s.Interrupt = sig })
+		if code != ExitInterrupted || !strings.Contains(out, "ничего не записано") {
+			t.Fatalf("code %d\n%s", code, out)
+		}
+		if _, err := os.Stat(".env"); err == nil {
+			t.Fatal(".env written after Ctrl-C")
+		}
+	})
+	t.Run("interactive: pulled without a question", func(t *testing.T) {
+		t.Chdir(t.TempDir())
+		fs := &fakeSys{fail: missing}
+		term := &script{t: t, answers: []string{gl.URL, "backend", botTok, "", "1", oat, "2", ""}}
+		var out bytes.Buffer
+		if code := Run(context.Background(), opts(""), Values{}, term, &out, fs.sys(nil)); code != ExitOK || !slices.Contains(fs.streams, pullCmd) {
+			t.Fatalf("code %d streams %v\n%s", code, fs.streams, out.String())
+		}
+		for _, p := range term.prompts {
+			if strings.Contains(p, "скачать") || strings.Contains(p, "Скачать образ песочницы") {
+				t.Fatalf("asked before pulling: %q", p)
+			}
+		}
+	})
+}

@@ -7,7 +7,7 @@
 //	reviewbot runs show <id>                             # one run's timeline
 //	reviewbot validate-repo-config [path]                # check a .reviewbot.yaml (exit 1 on errors)
 //	reviewbot init [-non-interactive] [-repo-config]     # write config.yaml and .env, check them
-//	reviewbot doctor [-config config.yaml] [-json]       # setup checks (exit 1 on a failed one)
+//	reviewbot doctor [-config config.yaml] [-json] [-pull] # setup checks (exit 1 on a failed one)
 package main
 
 import (
@@ -83,7 +83,7 @@ func runCommand(logger *slog.Logger, cmd string, args []string) error {
 	case "runs":
 		return runRuns(ctx, args, os.Stdout)
 	case "help", "-h", "--help":
-		fmt.Println("usage: reviewbot [serve -config config.yaml | egress -listen :3128 [-config config.yaml] [-mcp-listen :8091 -mcp-forward host:port] | sync-hooks -config config.yaml [-dry-run] | runs [-config config.yaml] [-since 48h] [-status failed] [-json] | runs show <id> | validate-repo-config [path] | init [-non-interactive] [-repo-config] | doctor [-config config.yaml] [-env .env] [-json]]")
+		fmt.Println("usage: reviewbot [serve -config config.yaml | egress -listen :3128 [-config config.yaml] [-mcp-listen :8091 -mcp-forward host:port] | sync-hooks -config config.yaml [-dry-run] | runs [-config config.yaml] [-since 48h] [-status failed] [-json] | runs show <id> | validate-repo-config [path] | init [-non-interactive] [-no-pull] [-repo-config] | doctor [-config config.yaml] [-env .env] [-json] [-pull]]")
 		return nil
 	default:
 		return fmt.Errorf("unknown command %q", cmd)

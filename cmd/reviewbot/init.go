@@ -38,6 +38,7 @@ func runInit(ctx context.Context, args []string, tio initIO) int {
 	fs.BoolVar(&o.NonInteractive, "non-interactive", false, "ask nothing: values from the flags, the environment (GITLAB_TOKEN, GITLAB_SERVICE_TOKEN, CLAUDE_CODE_OAUTH_TOKEN or ANTHROPIC_API_KEY, GITLAB_WEBHOOK_SECRET) and the existing files")
 	fs.BoolVar(&o.Force, "force", false, "overwrite a changed config.yaml without asking")
 	fs.BoolVar(&o.Up, "up", false, "run docker compose pull and up -d without asking")
+	fs.BoolVar(&o.NoPull, "no-pull", false, "do not download a missing sandbox image")
 	fs.StringVar(&o.GitLabURL, "gitlab-url", "", "GitLab address (or GITLAB_URL)")
 	fs.StringVar(&o.Groups, "groups", "", "comma-separated GitLab groups")
 	fs.StringVar(&o.Events, "events", "", "webhook, poll or both (default both)")
@@ -76,6 +77,7 @@ func runInit(ctx context.Context, args []string, tio initIO) int {
 	if tio.sys != nil {
 		sys = *tio.sys
 	}
+	sys.Interrupt = tio.interrupts
 	return initwiz.Run(ctx, o, old, term, tio.out, sys)
 }
 
