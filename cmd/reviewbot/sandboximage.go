@@ -69,13 +69,17 @@ func dockerPullOutput(ctx context.Context, image string) error {
 // it too) and a registry that refuses is reported before a review fails.
 // A failed pull is logged and recorded as the problem sandbox_image_missing
 // and tried again every sandboxImageRetry until it succeeds (then the
-// problem is resolved) or ctx ends.
+// problem is resolved), the image shows up on the host by other means, or
+// ctx ends.
 func ensureSandboxImage(ctx context.Context, d sandboxImageDeps) {
 	d = d.withDefaults()
-	if _, err := d.exec(ctx, "docker", "image", "inspect", "--format", "{{.Id}}", d.image); err == nil {
-		return
-	}
 	for {
+		// Inspect before every attempt: the operator may have pulled or built
+		// the image meanwhile (this also closes a problem left by a past run).
+		if _, err := d.exec(ctx, "docker", "image", "inspect", "--format", "{{.Id}}", d.image); err == nil {
+			d.probs.ResolveOutside(context.Background(), problems.SandboxImageMissing, "", d.image)
+			return
+		}
 		d.logger.Info("sandbox image missing: pulling", "image", d.image)
 		pctx, cancel := context.WithTimeout(ctx, sandboxPullTimeout)
 		err := d.pull(pctx, d.image)

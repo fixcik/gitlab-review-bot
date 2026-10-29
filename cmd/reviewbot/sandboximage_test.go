@@ -112,6 +112,56 @@ func TestEnsureSandboxImage(t *testing.T) {
 	}
 }
 
+// The image shows up outside the bot (docker pull/build by the operator):
+// the recorded problem is resolved and no further pull is made.
+func TestEnsureSandboxImageAppearsOutside(t *testing.T) {
+	const img = "ghcr.io/fixcik/gitlab-review-bot-sandbox:latest"
+	st, err := store.OpenSQLite(filepath.Join(t.TempDir(), "bot.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	svc := problems.New(problems.Options{Store: st})
+	active := func() int {
+		rows, err := st.ListProblems(context.Background(), problems.Filter{Status: problems.StatusNew})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return len(rows)
+	}
+	retry := make(chan time.Time)
+	deps := func(f *fakeImageDocker) sandboxImageDeps {
+		return sandboxImageDeps{image: img, exec: f.exec, pull: f.pull, probs: svc, logger: slog.New(slog.DiscardHandler), retry: func() <-chan time.Time { return retry }}
+	}
+	// Already present at start: a problem left from a previous run is closed.
+	svc.Record(context.Background(), problems.Problem{Kind: problems.SandboxImageMissing, Source: problems.SourceBot, Subject: img, Detail: "docker pull: old"})
+	if active() != 1 {
+		t.Fatal("setup: no problem")
+	}
+	f := &fakeImageDocker{present: true, pulled: make(chan struct{}, 4)}
+	ensureSandboxImage(context.Background(), deps(f))
+	if f.pulls != 0 || active() != 0 {
+		t.Fatalf("present at start: pulls %d, active %d", f.pulls, active())
+	}
+	// Pull fails, then the operator brings the image: the retry only inspects.
+	f = &fakeImageDocker{pullErr: errors.New("unauthorized"), pulled: make(chan struct{}, 4)}
+	done := make(chan struct{})
+	go func() {
+		ensureSandboxImage(context.Background(), deps(f))
+		close(done)
+	}()
+	<-f.pulled
+	waitFor(t, func() bool { return active() == 1 })
+	f.mu.Lock()
+	f.present = true
+	f.mu.Unlock()
+	retry <- time.Now()
+	<-done
+	if f.pulls != 1 || active() != 0 {
+		t.Fatalf("appeared outside: pulls %d, active %d", f.pulls, active())
+	}
+}
+
 func waitFor(t *testing.T, ok func() bool) {
 	t.Helper()
 	for i := 0; i < 200; i++ {
