@@ -1,0 +1,8 @@
+{
+  "branch": "chore/reviewbot-config-typo",
+  "title": "chore: подключить ревью-бота (с ошибкой)",
+  "scenarios": "R8",
+  "description": "Добавляем `.reviewbot.yaml`.",
+  "expect": "Ревью нет (репозиторий ещё не подключён), но бот проверяет `.reviewbot.yaml` из MR: одна заметка «⚠️ `.reviewbot.yaml` в этом MR невалиден» со строками ошибок (`auto_reviw` — подсказка `auto_review`; `tbd.max_lines must be >= 0`; `tools` — «removed: the review model no longer runs commands») и «подключится к ревью после мержа валидного». Пуш с исправлением → та же заметка меняется на «✅ Новый `.reviewbot.yaml` валиден — ревью этого репозитория начнётся после мержа».",
+  "invalid_repo_config": true
+}

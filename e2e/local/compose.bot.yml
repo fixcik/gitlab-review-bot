@@ -1,0 +1,18 @@
+# Override for the bot container (root docker-compose.yml, profile "full"):
+# joins the stand's network so that http://gitlab:8929 resolves, and GitLab
+# can deliver webhooks to http://reviewbot:8080/webhook. Used by run-bot.sh:
+#
+#   docker compose -f docker-compose.yml -f e2e/local/compose.bot.yml --profile full up -d --build
+
+services:
+  reviewbot:
+    # > queue.shutdown_grace of e2e/local/config.yaml (2m) + HTTP shutdown.
+    stop_grace_period: 3m
+    networks:
+      default: {}
+      reviewbot-local: {}
+
+networks:
+  reviewbot-local:
+    name: reviewbot-local
+    external: true

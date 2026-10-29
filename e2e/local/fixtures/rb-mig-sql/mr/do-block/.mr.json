@@ -1,0 +1,7 @@
+{
+  "branch": "mig/do-block-drop",
+  "title": "refactor: удалить orders.created_by через DO-блок",
+  "scenarios": "V4",
+  "description": "golang-migrate `0002_drop_created_by.up.sql` с `DO $$ … EXECUTE 'ALTER TABLE orders DROP COLUMN created_by' … $$`.",
+  "expect": "В промпте этой операции нет (сказано, что `DO $$` не разбирается); Claude находит удаление сам, проверяет `internal/store/orders.go` в merge base и пишет critical с `deployed_usage` → тред остаётся блокирующим."
+}

@@ -1,0 +1,423 @@
+# Конфиг сервиса reviewbot. Секреты лучше задавать через env:
+#   GITLAB_TOKEN (бот, роль Reporter), GITLAB_SERVICE_TOKEN (отдельный аккаунт с
+#   ролью Maintainer/Owner, можно личный PAT: ревьюеры, закрытие тредов, вебхуки), GITLAB_WEBHOOK_SECRET (не нужен при events: poll), CLAUDE_CODE_OAUTH_TOKEN (или ANTHROPIC_API_KEY),
+#   JIRA_TOKEN (и при желании JIRA_URL), USAGE_TOKEN, DIAG_TOKEN и MAP_TOKEN (необязательно, защищают /usage, /runs и /map)
+# Справочник всех ключей: docs/configuration.md
+
+listen: ":8080"
+data_dir: "./data"          # зеркала репозиториев, рабочие клоны, SQLite
+
+gitlab:
+  url: "https://gitlab.example.com"
+  # ca_file: "/etc/ssl/internal-ca.pem"   # если у GitLab внутренний CA
+
+  # Группы, проекты которых ревьюит бот (полные пути, подгруппы включаются).
+  # События из других проектов игнорируются, даже если там кто-то настроил
+  # вебхук на бота. Пусто = принимать события от любого проекта.
+  groups: []
+  #   - "backend"
+  #   - "platform/services"
+
+  # Главная (задеплоенная) ветка: снимки соседних репозиториев, карта системы,
+  # проверка «нет в main соседа». Пусто — ветка по умолчанию каждого проекта.
+  main_branch: ""
+  # main_branches:          # своя ветка для отдельных проектов (glob → ветка)
+  #   "legacy/**": master
+
+  # Проекты групп, которые бот не ревьюит (glob по пути, без учёта регистра).
+  # Как контекст для других ревью они остаются (см. review.context.exclude).
+  exclude: []
+  #   - "backend/legacy-*"
+
+  # Адрес /webhook бота так, как его видит GitLab. Нужен для sync_hooks.
+  # webhook_url: "https://reviewbot.internal/webhook"
+
+  # Автоматически создавать и чинить вебхук бота в каждом проекте групп
+  # (в GitLab Free/CE нет групповых вебхуков). Использует отдельный токен
+  # GITLAB_SERVICE_TOKEN с ролью Maintainer или Owner в этих группах; основной токен бота
+  # остаётся Reporter. Требует webhook_url, хотя бы одну группу и этот токен.
+  sync_hooks: false
+  sync_interval: "1h"       # как часто перепроверять (новые проекты)
+  hook_ssl_verify: true     # enable_ssl_verification у создаваемых вебхуков
+
+  # Откуда бот узнаёт о событиях: webhook (GitLab шлёт вебхуки на /webhook),
+  # poll (бот сам опрашивает API: не нужны адрес бота, вебхуки и
+  # GITLAB_WEBHOOK_SECRET; требует groups) или both (вебхук + опрос как
+  # страховка, дубли склеиваются).
+  # В продакшене рекомендуется both (нужны groups): GitLab не повторяет
+  # неудачную доставку вебхука, и события, пришедшие, пока бот перезапускался
+  # или лежал, при webhook теряются; опрос догоняет их после старта.
+  events: "webhook"
+  poll_interval: "5s"       # период опроса для poll и both (по умолчанию 5s, не меньше 5s)
+
+claude:
+  model: "sonnet"           # ревью, ответы, перепроверка совместимости; пусто = по умолчанию в Claude Code
+  # Советник (advisor tool): основная модель советуется с ним в сложных случаях
+  # (блокирующее замечание, breaking change). Пусто = без советника.
+  advisor_model: "opus"
+  # Сабагент code-search (Read/Grep/Glob) для широкого поиска по коду. Пусто = без него.
+  search_model: "haiku"
+  timeout: "15m"            # на один запуск
+  # Лёгкая модель для простых задач без инструментов (извлечение и синтез правил,
+  # сжатие памяти проекта); основное ревью идёт на claude.model. Принимаются алиасы CLI (haiku, sonnet, opus);
+  # пусто = модель по умолчанию.
+  light_model: "haiku"
+
+sandbox:
+  mode: "docker"            # docker | local (local — без изоляции, только для прототипа)
+  image: "reviewbot-sandbox:latest"
+  network: "reviewbot-sandbox"
+  egress_proxy: "http://egress:3128"
+  egress_allow:
+    - api.anthropic.com
+    - statsig.anthropic.com
+    - claude.ai
+    - console.anthropic.com
+  cpus: "2"
+  memory: "4g"
+  # Claude в песочнице только читает файлы (Read/Grep/Glob): ни Bash, ни команд
+  # репозитория, ни setup. Ключи sandbox.setup_timeout,
+  # sandbox.allow_unsandboxed_bash и review.default_tools удалены — конфиг с
+  # ними не загружается (docs/configuration.md#удалённые-ключи).
+
+review:
+  # Opt-in: ревьюятся только репозитории с .reviewbot.yaml в целевой ветке MR
+  # (пустой файл — настройки по умолчанию). false — все проекты gitlab.groups.
+  require_repo_config: true
+  debounce: "90s"           # пауза после пуша, чтобы схлопнуть серию пушей
+  max_diff_bytes: 400000
+  default_language: "ru"
+  max_findings: 30
+  # Замечания этого уровня и выше блокируют мерж (остаются открытыми тредами,
+  # нужна настройка проекта «All threads must be resolved»). Остальные видны
+  # inline, но сразу резолвятся служебным токеном. critical | major | minor | nit
+  block_min_severity: "critical"
+  assign_reviewer: true     # добавлять бота в ревьюеры MR (нужен GITLAB_SERVICE_TOKEN)
+  # Проверка обратной совместимости (trunk-based development): спецификации
+  # (oasdiff/buf/graphql-inspector) + анализ Claude с перепроверкой. Каждое
+  # найденное несовместимое изменение — блокирующий тред. Репозиторий может
+  # выключить у себя через compat.enabled: false; false здесь — выключить везде.
+  compat_check: true
+  # Проверки перед запуском Claude (/base, совместимость, линтеры, Jira,
+  # контекстные репозитории, покрытие, карта системы, миграции) — параллельно.
+  parallel_analyzers: true
+  # Кэш рабочих деревьев: файлы коммита (head MR, merge base для /base) из
+  # зеркала, только для чтения, общие для задач; хранятся ttl после последнего
+  # использования, сверх max_gb удаляются самые давно не использованные.
+  checkout_cache:
+    enabled: true
+    ttl: "2h"
+    max_gb: 10
+  compat_timeout: "3m"      # на один запуск инструмента проверки
+  # Mermaid-схема изменений в саммари («🗺 Схема изменений»). Репозиторий может
+  # выключить у себя через diagram: false.
+  diagram: true
+  # Саммари изменений в описании MR (свой блок между маркерами, текст автора не трогается).
+  # Выключено: бот пишет в чужие описания (нужна роль Developer или GITLAB_SERVICE_TOKEN).
+  description_summary: false
+  # Секреты и линтеры на изменённых строках (docs/features/lint.md). Сам бот
+  # запускает только gitleaks (sandbox без сети и токенов; каждый секрет
+  # блокирует мерж). Линтеры запускает CI репозитория, бот читает их отчёты
+  # (.reviewbot.yaml lint.ci); по умолчанию они мерж не блокируют.
+  lint:
+    enabled: true
+    timeout: "3m"           # на один запуск gitleaks
+    tools: [gitleaks]
+    severity_overrides: {}  # {"ci:ruff": "nit", "ci:semgrep:<rule-id>": "critical"}
+    allow_disable_secrets: false  # true — репозиторий может выключить gitleaks
+  # «TODO без задачи» (docs/features/lint.md): TODO/FIXME/XXX/HACK в
+  # комментариях, добавленных MR, должны ссылаться на задачу (PROJ-123, #12,
+  # URL задачи). Работает в самом боте, не зависит от lint.enabled.
+  todo:
+    enabled: true
+    keywords: [TODO, FIXME, XXX, HACK]   # заглавные, целым словом, только в комментариях
+    require_task: true
+    severity: minor
+    blocking: false         # true — блокирует мерж по block_min_severity
+    ignore: ["vendor/**", "node_modules/**", "**/*.min.js", "**/*.min.css"]
+    verify_keys: false      # true + Jira — ключи проверяются в Jira (до 10 запросов за ревью)
+  # Обучение на ответах команды: Developer+ объясняет в треде замечания бота,
+  # почему оно неверно, и бот запоминает правило для этого репозитория или для
+  # всех. Правила применяются во всех следующих ревью и ответах.
+  learn:
+    enabled: true
+    model: ""               # модель извлечения правил; пусто = claude.light_model
+    max_per_hour: 30        # отдельный лимит запусков извлечения (плюс общий лимит)
+    max_in_prompt: 80       # сколько самых свежих правил класть в промпт
+    # Обучение на действиях: замечания, которые человек закрыл без изменения
+    # кода, копятся; при dismiss_threshold штук лёгкая модель формулирует
+    # 0-3 правила «что не отмечать».
+    from_actions: true
+    dismiss_threshold: 3
+  # Инструкции для путей во всех репозиториях (glob doublestar); к ним
+  # добавляются path_instructions из .reviewbot.yaml.
+  path_instructions: []
+  #  - path: "**/migrations/**"
+  #    instructions: "Проверяй обратимость и блокировки таблиц"
+  # Память проекта: что бот выяснил о сборке, тестах, линте и структуре
+  # каждого репозитория (хранится в базе бота, по ID проекта). Читается в
+  # начале каждого запуска, обновляется в конце; разросшиеся разделы сжимает
+  # claude.light_model. Команды из памяти только подсказываются людям.
+  memory:
+    enabled: true
+    max_chars: 6000         # на один проект (на раздел — до 1500)
+  # Жёсткий порог размера (docs/features/review.md#размер-mr): больше стольких
+  # изменённых строк в проверяемом диапазоне (без ignore) — Claude не
+  # запускается, в саммари «📦 MR слишком большой». 0 — без порога. Ставьте не
+  # ниже tbd.max_lines (там только предупреждение).
+  max_mr_lines: 2000
+  big_mr:
+    deterministic: true     # всё равно: gitleaks и детерминированная совместимость
+    override_label: "big-mr-ok"  # метка «ревьюить при любом размере»; "" — без метки
+    block: false            # true — блокирующий тред, пока MR больше порога
+  # Выбор модели по риску (docs/features/review.md#выбор-модели-по-риску); только
+  # в сервисном конфиге. Тяжёлый маршрут выключен, пока heavy_model пустая.
+  routing:
+    enabled: true           # лёгкий маршрут: мелкие низкорисковые правки — light_model
+    heavy_model: ""         # например "opus": большие или рискованные диапазоны
+    heavy_min_lines: 300    # тяжёлый — от стольких изменённых строк (без ignore)
+    heavy_paths: []         # и/или файлы под glob'ами: ["**/migrations/**", "**/openapi*.yaml"]
+  # Trunk-based development (docs/features/tbd.md): блок в саммари и правило про флаги.
+  tbd:
+    enabled: true
+    max_lines: 400          # изменённых строк (без ignore); 0 — без предупреждения
+    max_age: "72h"          # возраст ветки
+    max_behind: 30          # отставание от целевой ветки, коммитов
+    pipeline: true          # статус пайплайна, обновляется, пока он идёт
+    feature_flags: true     # major на изменение поведения без возможности выключить
+    flags_hint: ""          # как у вас делаются флаги; пусто — любой переключатель
+  # Покрытие нового кода из артефакта CI (docs/features/coverage.md). Какую джобу
+  # и файл брать, указывает репозиторий в .reviewbot.yaml (coverage.job/path).
+  coverage:
+    enabled: true
+    max_report_mb: 50
+  # Безопасность миграций БД для trunk-based (docs/features/migrations.md):
+  # подсказки Claude, где смотреть (опасные операции в миграциях MR, кандидаты
+  # использования удаляемого в задеплоенном коде); решает Claude. Миграции
+  # находятся без настройки.
+  migrations:
+    enabled: true
+    paths: []               # доп. glob'ы файлов миграций
+    exclude: []             # glob'ы файлов, которые не считать миграциями
+    dialect: postgres       # postgres | mysql
+    max_files: 50           # файлов миграций в одном MR
+    max_usages: 5           # кандидатов использования на объект для Claude
+  # Скиллы команды: папка со скиллами в формате Claude Code (<dir>/<имя>/SKILL.md).
+  # Claude видит названия и описания и сам открывает подходящие на ревью и в
+  # ответах. Скиллы из репозитория (.claude/skills) не загружаются никогда.
+  skills:
+    dir: ""                 # например "/etc/reviewbot/skills"; пусто = выключено
+  default_ignore:
+    - "**/*.lock"
+    - "**/go.sum"
+    - "**/package-lock.json"
+    - "**/*.min.js"
+    - "vendor/**"
+    - "node_modules/**"
+  # Контекст из других репозиториев: Claude читает (только чтение) остальные
+  # проекты gitlab.groups в состоянии ветки по умолчанию, чтобы находить
+  # потребителей меняемых API, событий, таблиц, конфига. Выключается само,
+  # если gitlab.groups пуст.
+  context:
+    enabled: true
+    refresh_interval: "10m" # как часто обновлять список проектов и ветки
+    max_repos: 50           # не больше стольких репозиториев на один запуск
+    max_repo_mb: 500        # репозитории крупнее пропускаются
+    exclude: []             # glob'ы проектов, которые никогда не показываются Claude
+
+  # Карта системы (docs/features/sysmap.md): кто какие HTTP-эндпоинты, вебхуки,
+  # WebSocket/SSE предоставляет и потребляет. Строится в фоне по снимкам контекста
+  # (нужен review.context и непустой gitlab.groups). Код всех репозиториев групп
+  # уходит в лёгкую модель; страница /map — граф и неразрешённые вызовы.
+  sysmap:
+    enabled: true
+    model: "sonnet"           # строится один раз, дальше только изменённые файлы; пусто — claude.light_model
+    max_runs_per_hour: 20     # свой бюджет, не входит в limits.global_runs_per_hour; 0 — только OpenAPI
+    max_files_per_repo: 400
+    max_file_kb: 64
+    refresh_interval: "10m"
+    exclude: []               # glob'ы путей проектов, которые не сканировать
+    hints: {}                 # выражение адреса / переменная → проект, например ORDERS_URL: backend/orders
+    deps: true                # фаза B: зависимости MR от неразвёрнутого и связанные MR (только саммари, не блокирует)
+    deps_max_files: 1000      # файлов кода MR на ревью (кеш по хэшу; запуски — из deps_max_runs_per_hour)
+    deps_max_mrs: 10          # открытых MR на соседний репозиторий
+    deps_max_api_calls: 100   # запросов к GitLab на фазу B в одном ревью
+    deps_max_runs: 30         # запусков модели на фазу B в одном ревью (по ~25 файлов за запуск)
+    deps_max_runs_per_hour: 60 # свой часовой бюджет фазы B, отдельно от max_runs_per_hour
+
+  # MCP-сервер бота (docs/features/mcp.md): модель во время ревью берёт данные
+  # инструментами и отправляет замечания через submit_finding, бот сразу их
+  # проверяет. Публикация — в конце, как раньше. Включено по умолчанию: если
+  # CLI не подключился к серверу, ревью один раз повторяется без MCP (полный
+  # промпт, проблема mcp_failed), и следующие 30 минут MCP пропускается.
+  # Нет адреса для песочницы или порт не открылся — MCP выключен, в логе предупреждение.
+  mcp:
+    enabled: true
+    listen: ":8091"           # отдельный порт, не listen
+    url: ""                   # пусто: docker — http://egress:8091/mcp, local — http://127.0.0.1:8091/mcp
+    max_calls: 200            # вызовов инструментов на один запуск ревью
+    max_response_kb: 64       # предел ответа одного инструмента
+
+  # Проблемы проверки (docs/features/problems.md): что бот сам не смог
+  # проверить — страница /problems, блок «⚠️ Не удалось проверить» в саммари,
+  # упоминание людей при новой проблеме.
+  problems:
+    enabled: true
+    notify: []                # логины GitLab без @, например [alice, devops.bob]
+    notify_mode: summary      # summary — cc в саммари; note — отдельная заметка в MR
+    renotify_after: "168h"    # напомнить о повторяющейся проблеме не чаще раза в неделю
+    page_url: ""              # внешний адрес бота для ссылки, например https://reviewbot.example.com
+    retention: "2160h"        # удалить проблемы, не повторявшиеся 90 дней
+
+  # Реакции (docs/features/reactions.md): 👀 команда принята, ✅/❌/⏳/🚫 чем
+  # закончилась, ❤️/👍 на «спасибо»/«ок» без запуска Claude, 🧠 запомнено
+  # правило, 🎉 ревью без замечаний. Имена эмодзи GitLab; "" выключает событие.
+  reactions:
+    enabled: true
+    picked_up: eyes
+    done: leftwards_arrow_with_hook    # "" — только снять 👀
+    failed: x
+    postponed: hourglass_flowing_sand
+    denied: no_entry_sign
+    thanks: heart             # "" — «@bot спасибо» снова уходит в чат (запуск Claude)
+    ack: thumbsup
+    learned: brain
+    noted: thumbsup              # ответ в треде бота прочитан, но не правило и не вопрос; "" — только снять 👀
+    clean_review: tada
+    ignore_users: []          # другие боты, например [renovate-bot]
+  # Автоматические метки MR (docs/features/labels.md). Бот ставит метки,
+  # правила которых сработали, и снимает только СВОИ устаревшие; метки людей
+  # не трогает. Метки MR требуют роли Developer: Reporter-бот получает 403,
+  # тогда метки ставит служебный токен (GITLAB_SERVICE_TOKEN).
+  labels:
+    enabled: true
+    remove_stale: true        # снимать свои метки, которые больше не подходят
+    create_missing: false     # метки нет в проекте/группах: false — пропустить и записать проблему; true — GitLab создаст
+    rules: []                 # общие правила для всех репозиториев, например:
+    # - name: backend
+    #   paths: ["api/**", "internal/**"]
+    # - name: db-migration
+    #   when_fact: migrations   # migrations | api_changed | api_breaking | big_mr | lint_secret | no_tests_changed
+    # - name: "type::bug"
+    #   instruction: "MR исправляет неправильное поведение (не новая функция и не рефакторинг)."
+
+  # Перепроверка замечаний перед публикацией (docs/features/verify.md): новые
+  # critical/major замечания проходят один дополнительный запуск, который
+  # пытается их опровергнуть по коду (подтвердить / понизить / отклонить).
+  # Тем же запуском перепроверяются breaking changes Claude.
+  verify:
+    enabled: true
+    severities: [critical, major]
+    max_findings: 10          # остальные публикуются без перепроверки
+    model: ""                 # пусто — claude.model
+    timeout: "0s"             # 0 — claude.timeout
+
+  # Разбор упавших пайплайнов (docs/features/ci.md): дайджест упавших job в
+  # саммари MR, объяснение причины от Claude отдельным тредом (один запуск на
+  # пайплайн), заметка в MR, который сломал main. Нужны события Pipeline в
+  # вебхуке (sync_hooks подписывает сам) или опрос (gitlab.events: poll/both).
+  ci:
+    enabled: true
+    explain: true             # false — только дайджест, без запусков Claude
+    model: ""                 # пусто — claude.light_model (иначе claude.model)
+    max_log_lines: 40         # конец лога упавшей job
+    max_tests: 10             # упавших тестов в дайджесте
+    main_branch: true         # следить за пайплайнами main
+    main_sources: [push]      # чьи пайплайны main решают «main сломан»: push, schedule, web, api, trigger, …
+    ignore_jobs: []           # glob'ы имён job: ["deploy-*", "pages"]
+    notify_main: []           # кого звать, когда сломан main: [teamlead]
+
+limits:
+  global_runs_per_hour: 15  # все запуски Claude вместе
+  user_reruns_per_hour: 5   # @bot review / full review
+  user_chat_per_hour: 20    # вопросы боту в тредах
+  mr_rerun_cooldown: "10m"  # между ручными перезапусками одного MR
+  max_concurrent: 2
+  exempt_users: []          # usernames без пользовательских лимитов
+
+# Страница расхода токенов: http://<бот>/usage (и /usage/data.json).
+usage:
+  enabled: true             # false — страница выключена (404)
+  # Без токена страница открыта всем, кто может достучаться до порта бота
+  # (при старте в лог пишется предупреждение). С токеном нужно один раз открыть
+  # /usage?token=<токен> (дальше хватит cookie) или передать заголовок
+  # Authorization: Bearer <токен>. Лучше через env USAGE_TOKEN.
+  token: ""
+  retention: "8760h"        # сколько хранить записи о запусках (365 дней)
+  # Бюджет на месяц в $ (условная стоимость): блок «Бюджет месяца» с прогнозом
+  # на /usage. 0 — блока нет. Только информация: бот ничего не ограничивает.
+  budget_usd: 0
+
+# Диагностика запусков: http://<бот>/runs и `reviewbot runs`. Для каждой задачи
+# хранится таймлайн и полные сессии Claude (промпты, транскрипт, ответ) в
+# <data_dir>/diag; секреты вычищаются при записи, код хранится как есть.
+diag:
+  enabled: true             # false — ничего не записывается, /runs отвечает 404
+  retention: "48h"          # сколько хранить записи
+  max_run_mb: 20            # предел на одну задачу (транскрипт обрезается с пометкой)
+  max_total_mb: 2048        # предел на все записи (самые старые удаляются первыми)
+  # Токен для /runs (лучше env DIAG_TOKEN). Пусто — используется токен /usage
+  # (usage.token / USAGE_TOKEN); если пуст и он, страница открыта (в лог пишется
+  # предупреждение). Вход как у /usage: /runs?token=<токен> или Bearer.
+  token: ""
+
+# Метрики Prometheus: GET /metrics (описание и примеры алертов — docs/metrics.md).
+# В метках нет пользователей, проектов и MR; разбивка по людям — на /usage.
+# GET /readyz (готовность: GitLab, SQLite, Docker) работает всегда, /healthz — живость.
+metrics:
+  enabled: true             # false — /metrics отвечает 404
+  # Токен для скрейпера (лучше env METRICS_TOKEN): только заголовок
+  # Authorization: Bearer <токен>, без ?token= и cookie. Пусто — эндпоинт открыт
+  # (при старте в лог пишется строка об этом).
+  token: ""
+
+# Трейсинг OpenTelemetry (docs/features/tracing.md): одна трасса на задачу очереди
+# со спанами GitLab, git, лимитов, анализаторов, запусков Claude, MCP и публикации.
+# Экспорт OTLP/HTTP (JSON) в Tempo, OpenTelemetry Collector, Alloy или Grafana Cloud.
+# В спанах только id, размеры, счётчики, длительности и статусы — без кода, промптов,
+# текстов заметок и токенов. Env OTEL_EXPORTER_OTLP_ENDPOINT, OTEL_EXPORTER_OTLP_HEADERS,
+# OTEL_SERVICE_NAME переопределяют файл (включает трейсинг только enabled).
+tracing:
+  enabled: false
+  endpoint: ""              # http://tempo:4318 (к нему добавляется /v1/traces)
+  # headers:                # значения могут ссылаться на env: ${NAME}; в лог не пишутся
+  #   Authorization: "Basic ${GRAFANA_OTLP_AUTH}"   # Grafana Cloud
+  #   X-Scope-OrgID: "team"                         # многотенантный Tempo
+  service_name: "gitlab-review-bot"
+  environment: ""           # deployment.environment, например prod
+  sample_ratio: 1           # доля сохраняемых трасс, 0..1
+  timeout: "10s"            # таймаут одного запроса экспорта
+  # Ссылка на трассу на /runs/<id>: {trace_id} заменяется на id трассы.
+  ui_url: ""                # https://grafana.example.com/explore?...{trace_id}...
+  # ca_file: "/etc/ssl/internal-ca.pem"
+  # ЭКСПЕРИМЕНТАЛЬНО: собственные трейсы Claude Code из песочницы (песочница начинает
+  # ходить в приёмник; см. раздел «Телеметрия Claude Code CLI» в docs/features/tracing.md).
+  claude_cli: false
+  # claude_cli_endpoint: "" # приёмник, как его видит песочница (по умолчанию endpoint)
+  # claude_cli_headers: false   # передавать headers в песочницу (по умолчанию нет)
+
+# Очередь задач: всё, что в ней было, переживает перезапуск (SQLite).
+queue:
+  # Остановка (SIGTERM/SIGINT): новые задачи не запускаются, выполняющимся даётся
+  # столько времени закончить; потом они прерываются и повторяются после старта.
+  # Вебхуки и опрос тем временем принимаются. 0 = прерывать сразу. Таймаут остановки
+  # контейнера (stop_grace_period / terminationGracePeriodSeconds) должен быть больше.
+  shutdown_grace: "5m"
+  # Команды, вопросы и прочие не-авторевью старше этого после перезапуска отбрасываются.
+  manual_max_age: "6h"
+
+# Jira Data Center / Server (REST API v2, Personal Access Token) и проверка
+# заголовка MR. Ожидаемый формат заголовка: "feat: описание (PROJ-123)".
+jira:
+  url: ""                   # https://jira.example.com; пусто = Jira выключена (проверка заголовка работает)
+  # token: ""               # лучше через env JIRA_TOKEN; токен остаётся в сервисе
+  # ca_file: "/etc/ssl/internal-ca.pem"   # если у Jira внутренний CA
+  project_keys: ["PROJ"]    # префиксы ключей задач; пусто = любые
+  epic_link_field: "customfield_10008"    # поле Epic Link
+  comments_limit: 10        # сколько последних комментариев задачи передать Claude
+  title_check: true         # подсказка про формат заголовка в саммари
+  require_key_in_title: true  # ключ задачи должен быть в конце заголовка в скобках
+  title_types: [feat, fix, refactor, perf, chore, docs, test, build, ci, style, revert]
+  title_language: "en"      # язык предлагаемого заголовка (не зависит от review.default_language)
+  # Свой формат предлагаемого заголовка; пусто — встроенный. {types}, {language} подставляются.
+  title_prompt: ""

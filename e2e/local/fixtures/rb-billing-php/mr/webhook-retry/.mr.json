@@ -1,0 +1,7 @@
+{
+  "branch": "feat/invoice-webhook-retry",
+  "title": "feat: повтор вебхука invoice.paid и camelCase в теле",
+  "scenarios": "U8",
+  "description": "До трёх попыток отправки вебхука; поля тела в camelCase (`orderId`, `invoiceId`).",
+  "expect": "В саммари «🔗 Затронуто…»: «вебхук … (отправляет этот репозиторий)» с получателем `rb-orders-py`; Claude видит, что `rb-orders-py` читает `order_id` — замечание о несовместимости тела вебхука."
+}

@@ -1,0 +1,13 @@
+/data/
+/reviewbot
+/bin/
+config.yaml
+.env
+*.db
+*.db-wal
+*.db-shm
+# local test stand (e2e/local): secrets and runtime state
+e2e/local/.env.local
+e2e/local/.state/
+e2e/local/data/
+.cache/

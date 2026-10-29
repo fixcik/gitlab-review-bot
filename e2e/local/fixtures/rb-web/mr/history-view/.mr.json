@@ -1,0 +1,7 @@
+{
+  "branch": "feat/order-history-view",
+  "title": "feat: экран истории заказа",
+  "scenarios": "U12, U13, U16",
+  "description": "Вызывает `GET /orders/{id}/history` (добавляется в MR `rb-orders-py` `feat/orders-history`). Заодно ежедневный отчёт и ссылка на релизы.",
+  "expect": "Блок «⏳ Зависит от неразвёрнутого»: «`GET /orders/{id}/history` нет в main …/rb-orders-py — добавляется в …/rb-orders-py!N (не смержен): мержить после него» (U12). Вызов `${REPORTS_URL}/reports/daily` (база, которой нет у других вызовов) и `https://api.github.com/...` в блоке не появляются (U13). Тредов по данным фазы B нет (U16). U13 полностью: закрыть MR в rb-orders-py, `@reviewbot review` → «открытого MR, который его добавляет, не найдено»."
+}

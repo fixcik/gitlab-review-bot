@@ -1,0 +1,10 @@
+# Weakened settings proposed by the MR (must not take effect: read from the target branch).
+language: ru
+lint:
+  enabled: false
+compat:
+  enabled: false
+verify:
+  enabled: false
+limits:
+  user_reruns_per_hour: 100

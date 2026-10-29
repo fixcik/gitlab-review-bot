@@ -1,0 +1,7 @@
+{
+  "branch": "lint/shipping-rules",
+  "title": "feat: расчёт стоимости доставки",
+  "scenarios": "K2, K5, E7, H2",
+  "description": "Доставка по зонам.",
+  "expect": "Линтер из CI, отчёт Code Quality: job `ruff` (`--output-format=gitlab`, `artifacts:reports:codequality`) → треды `ci:ruff` только на изменённых строках (неиспользуемый импорт, `except:` без типа, изменяемый аргумент по умолчанию), не блокируют (K2); пока job идёт — «⏳ ждём job `ruff`», треды после пайплайна без нового запуска Claude (K5). rb-py без «All threads must be resolved» — блокирующий тред не блокирует мерж (E7). H2: правило «для всех», заведённое в rb-backend, применяется здесь."
+}

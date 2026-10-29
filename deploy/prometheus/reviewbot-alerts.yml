@@ -1,0 +1,290 @@
+# Правила алертов Prometheus для GitLab Review Bot.
+#
+# Подключение (prometheus.yml):
+#   rule_files:
+#     - /etc/prometheus/rules/reviewbot-alerts.yml
+# Проверка перед загрузкой: promtool check rules reviewbot-alerts.yml
+#
+# Правила рассчитаны на job="reviewbot" (как в deploy/prometheus/scrape.yml).
+# Другое имя job — замените job="reviewbot" в ReviewbotDown/ReviewbotAbsent.
+# Пороги подобраны для команды на десятки MR в день; поменяйте под себя.
+# Все метрики и метки сверяет с кодом тест deploy/assets_test.go.
+# Юнит-тесты правил: promtool test rules tests/reviewbot-alerts.test.yml
+# (из этого каталога).
+#
+# Severity: critical — бот не работает; warning — работает плохо, нужен
+# человек; info — посмотреть, когда будет время.
+# Куда смотреть: /runs — задачи и транскрипты Claude, /usage — расход по
+# людям и MR, /problems — что бот не смог проверить, /map — карта системы,
+# /readyz — какая проверка готовности падает.
+
+groups:
+  - name: reviewbot-availability
+    rules:
+      # Скрейп не проходит: процесс лежит, сменился адрес или токен /metrics.
+      - alert: ReviewbotDown
+        expr: up{job="reviewbot"} == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "reviewbot: /metrics не отвечает ({{ $labels.instance }})"
+          description: "Prometheus не может снять метрики 5 минут. Проверьте процесс/контейнер (docker compose ps, логи) и /healthz. Ответ 401 — METRICS_TOKEN бота не совпадает с токеном в scrape config."
+
+      # Таргет пропал из Prometheus совсем (например, сервис удалён из service discovery).
+      - alert: ReviewbotAbsent
+        expr: absent(up{job="reviewbot"})
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "reviewbot: нет таргета job=reviewbot"
+          description: "Prometheus не скрейпит бота 15 минут: проверьте scrape config (deploy/prometheus/scrape.yml) и service discovery."
+
+      # Одна из проверок /readyz (gitlab, store, docker) падает.
+      - alert: ReviewbotNotReady
+        expr: min by (instance, check) (reviewbot_readiness_check_ok) == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "reviewbot: проверка {{ $labels.check }} в /readyz не проходит"
+          description: "gitlab — недоступен GitLab или отозван GITLAB_TOKEN; store — SQLite в каталоге данных; docker — демон недоступен (сокет, права). Текст ошибки — в ответе /readyz."
+
+  - name: reviewbot-queue
+    rules:
+      # Очередь растёт: ждущих задач больше 10 на протяжении 15 минут.
+      # Время ожидания в очереди метрикой не отдаётся — алерт по длине.
+      - alert: ReviewbotQueueBacklog
+        expr: sum by (instance) (reviewbot_queue_jobs{state="pending"}) > 10
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "reviewbot: в очереди {{ $value }} задач дольше 15 минут"
+          description: "Не хватает воркеров (limits.max_concurrent) или задачи зависают. Что выполняется и сколько — /runs; длительность задач — дашборд, ряд «Обзор»."
+
+      # Есть задачи, готовые к запуску, а ни одна не выполняется: воркеры зависли.
+      # state="pending" — готовые задачи (ждут только воркера или своего MR) и авторевью
+      # в паузе review.debounce; отложенные до срока (refresh_status, лимит Claude,
+      # RetryLater) — это retry_wait, они в алерт не попадают и других задач не держат.
+      # Во время дренажа (SIGTERM) новые задачи не стартуют — это не зависание.
+      # review.debounce длиннее 15 минут — увеличьте for.
+      - alert: ReviewbotQueueStuck
+        expr: |
+          sum by (instance) (reviewbot_queue_jobs{state="pending"}) > 0
+          and sum by (instance) (reviewbot_queue_jobs{state="running"}) == 0
+          unless on (instance) max by (instance) (reviewbot_queue_draining) == 1
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "reviewbot: {{ $value }} готовых задач не запускаются 15 минут"
+          description: "Задачи готовы к запуску, но ни одна не выполняется — воркеры зависли. Отложенные задачи (retry_wait) сюда не входят. Последние задачи и где они встали — /runs. Очередь устойчивая (SQLite): рестарт не теряет задачи — невыполненные запустятся снова после старта."
+
+      # Больше 20% задач падает (минимум 5 задач за окно).
+      - alert: ReviewbotJobFailureRatioHigh
+        expr: |
+          (
+            sum by (instance) (increase(reviewbot_jobs_total{status="failed"}[15m]))
+            / clamp_min(sum by (instance) (increase(reviewbot_jobs_total[15m])), 1)
+          ) > 0.2
+          and sum by (instance) (increase(reviewbot_jobs_total[15m])) >= 5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "reviewbot: {{ $value | humanizePercentage }} задач завершаются ошибкой"
+          description: "Подробности по упавшим задачам — /runs?status=failed (таймлайн, ошибка, транскрипт Claude)."
+
+  - name: reviewbot-claude
+    rules:
+      # Claude повторно упирается в лимит подписки/API.
+      - alert: ReviewbotClaudeRateLimited
+        expr: sum by (instance) (increase(reviewbot_claude_rate_limited_total[1h])) >= 3
+        labels:
+          severity: warning
+        annotations:
+          summary: "reviewbot: лимит Claude исчерпан {{ $value | humanize }} раз за час"
+          description: "Ревью откладываются (status=postponed) до сброса лимита. Кто и на что тратит — /usage; отложенные задачи — /runs?status=postponed."
+
+      # Больше 20% запусков Claude падает с ошибкой или таймаутом (минимум 5 запусков).
+      - alert: ReviewbotClaudeFailureRatioHigh
+        expr: |
+          (
+            sum by (instance) (increase(reviewbot_claude_runs_total{result=~"error|timeout"}[30m]))
+            / clamp_min(sum by (instance) (increase(reviewbot_claude_runs_total[30m])), 1)
+          ) > 0.2
+          and sum by (instance) (increase(reviewbot_claude_runs_total[30m])) >= 5
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "reviewbot: {{ $value | humanizePercentage }} запусков Claude падают"
+          description: "Сбой CLI, max turns, таймаут sandbox. Транскрипты упавших запусков — /runs?status=failed; проверьте sandbox-образ и доступ к API (egress)."
+
+      # Модель часто отвечает не по схеме (ответ дважды не прошёл проверку).
+      - alert: ReviewbotInvalidOutputSpike
+        expr: |
+          (
+            sum by (instance) (increase(reviewbot_problems_total{kind="invalid_output"}[1h]))
+            or on (instance) (0 * sum by (instance) (reviewbot_build_info))
+          )
+          + (
+            sum by (instance) (increase(reviewbot_verify_runs_total{result="invalid_output"}[1h]))
+            or on (instance) (0 * sum by (instance) (reviewbot_build_info))
+          )
+          + (
+            sum by (instance) (increase(reviewbot_ci_explain_runs_total{result="invalid_output"}[1h]))
+            or on (instance) (0 * sum by (instance) (reviewbot_build_info))
+          )
+          > 3
+        labels:
+          severity: warning
+        annotations:
+          summary: "reviewbot: {{ $value | humanize }} ответов модели не по схеме за час"
+          description: "Ревью, перепроверки или объяснения CI не опубликованы из-за ответа не по схеме. Какие задачи — /problems?kind=invalid_output, транскрипты — /runs. Частая причина — смена модели или версии Claude Code."
+
+      # Условная стоимость запусков за сутки выше порога.
+      # ПОРОГ: 50 USD в сутки — замените число в expr под свой бюджет
+      # (при подписке это оценка по ценам API, а не счёт).
+      - alert: ReviewbotClaudeCostHigh
+        expr: sum by (instance) (increase(reviewbot_claude_cost_usd_total[1d])) > 50
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "reviewbot: стоимость Claude за сутки {{ $value | printf \"%.2f\" }} USD"
+          description: "Кто и в каких MR тратит больше всего — /usage; по видам запусков — дашборд, ряд «Claude». Порог задан в deploy/prometheus/reviewbot-alerts.yml."
+
+      # Общий лимит запусков бота регулярно исчерпан: ревью откладываются.
+      - alert: ReviewbotGlobalLimitHit
+        expr: sum by (instance) (increase(reviewbot_limit_denials_total{scope="global"}[1h])) > 5
+        labels:
+          severity: info
+        annotations:
+          summary: "reviewbot: общий лимит запусков исчерпан ({{ $value | humanize }} отказов за час)"
+          description: "Достигнут limits.global_runs_per_hour. Если это нормальная нагрузка — поднимите лимит; кто запускает — /usage."
+
+  - name: reviewbot-quality
+    rules:
+      # Появилась новая проблема проверки (бот не смог что-то проверить).
+      - alert: ReviewbotNewVerificationProblem
+        expr: sum by (instance, kind) (increase(reviewbot_problems_new_total[15m])) > 0
+        labels:
+          severity: info
+        annotations:
+          summary: "reviewbot: новая проблема проверки ({{ $labels.kind }})"
+          description: "Бот не смог что-то проверить в ревью. Что именно и как исправить — /problems?kind={{ $labels.kind }}; «Скрыть» убирает её, пока она не появится снова."
+
+      # Проблема повторяется массово (например, линтер упал во всех ревью).
+      - alert: ReviewbotVerificationProblemsFrequent
+        expr: sum by (instance, kind) (increase(reviewbot_problems_total[1h])) > 20
+        labels:
+          severity: warning
+        annotations:
+          summary: "reviewbot: частые проблемы проверки ({{ $labels.kind }})"
+          description: "Больше 20 за час. Подсказки — /problems?kind={{ $labels.kind }}."
+
+      # Перепроверка замечаний часто не выполняется: замечания идут без неё.
+      - alert: ReviewbotVerifyFailing
+        expr: sum by (instance) (increase(reviewbot_verify_runs_total{result!="ok"}[1h])) > 3
+        labels:
+          severity: info
+        annotations:
+          summary: "reviewbot: перепроверка замечаний не выполняется"
+          description: "Общий лимит, лимит Claude или ответ не по схеме — разбивка по result на дашборде («Качество ревью»), подробности — /problems?kind=verify_failed."
+
+      # gitleaks нашёл секреты в MR.
+      - alert: ReviewbotSecretsFound
+        expr: sum by (instance) (increase(reviewbot_tool_runs_total{tool="gitleaks",result="findings"}[15m])) > 0
+        labels:
+          severity: critical
+        annotations:
+          summary: "reviewbot: gitleaks нашёл секреты в merge request"
+          description: "Какой MR — /runs (фильтр по времени); секрет нужно отозвать, а не только удалить из кода."
+
+      # Инструменты массово недоступны: sandbox-образ собран без них или не запускается.
+      - alert: ReviewbotSandboxToolsUnavailable
+        expr: sum by (instance) (increase(reviewbot_tool_runs_total{result="unavailable"}[30m])) > 5
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "reviewbot: инструменты проверок недоступны в sandbox-образе"
+          description: "Проверьте sandbox.image (Dockerfile.sandbox) и доступность Docker (/readyz)."
+
+      # Репозиторий с невалидным .reviewbot.yaml не ревьюится, пока файл не исправят.
+      - alert: ReviewbotRepoConfigInvalid
+        expr: sum by (instance) (increase(reviewbot_skipped_total{reason="repo_config_invalid"}[1h])) > 0
+        labels:
+          severity: info
+        annotations:
+          summary: "reviewbot: ревью пропущены из-за невалидного .reviewbot.yaml"
+          description: "Какие проекты и какие ошибки — /problems?kind=repo_config_invalid; заметка с ошибками — в MR."
+
+  - name: reviewbot-ci
+    rules:
+      # main красный: заметка в MR-виновнике уже написана, алерт — для дежурного.
+      - alert: ReviewbotMainBroken
+        expr: sum by (instance, cause) (increase(reviewbot_ci_failures_total{scope="main"}[30m])) > 0
+        labels:
+          severity: info
+        annotations:
+          summary: "reviewbot: упал пайплайн main ({{ $labels.cause }})"
+          description: "cause: mr — сломало изменение (кого бот позвал — в заметке MR-виновника), infra/flaky — инфраструктура или нестабильный тест, unknown — не объяснено. Прямой пуш — /problems?kind=main_pipeline_failed; объяснение — /runs."
+
+  - name: reviewbot-gitlab
+    rules:
+      # GitLab отвечает 5xx/429 или не отвечает (минимум ~0.1 запроса в секунду).
+      - alert: ReviewbotGitLabErrors
+        expr: |
+          (
+            sum by (instance) (rate(reviewbot_gitlab_requests_total{code=~"5..|429|error"}[10m]))
+            / clamp_min(sum by (instance) (rate(reviewbot_gitlab_requests_total[10m])), 0.001)
+          ) > 0.1
+          and sum by (instance) (rate(reviewbot_gitlab_requests_total[10m])) > 0.1
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "reviewbot: {{ $value | humanizePercentage }} запросов к GitLab с ошибкой"
+          description: "5xx/429/нет ответа от GitLab API. Проверьте GitLab и сеть; /readyz (проверка gitlab). Задачи с ошибками — /runs?status=failed."
+
+      # Вебхуки с неверным секретом: GitLab настроен с другим X-Gitlab-Token.
+      - alert: ReviewbotWebhookUnauthorized
+        expr: sum by (instance) (increase(reviewbot_webhook_events_total{result="unauthorized"}[15m])) > 5
+        labels:
+          severity: warning
+        annotations:
+          summary: "reviewbot: вебхуки отклоняются (неверный X-Gitlab-Token)"
+          description: "Secret token вебхука в GitLab не совпадает с GITLAB_WEBHOOK_SECRET бота — события не доходят. См. docs/setup-gitlab.md."
+
+      # Режим опроса (gitlab.events: poll/both): раунды опроса прекратились.
+      # Окно растёт с gitlab.poll_interval (reviewbot_poll_interval_seconds):
+      # нет ни одного раунда дольше max(3 × poll_interval, 10 минут).
+      # Срабатывает, только если опрос когда-то работал (был хотя бы один раунд).
+      - alert: ReviewbotPollerStalled
+        expr: |
+          time() - max by (instance) (reviewbot_poll_last_round_timestamp_seconds)
+            > clamp_min(3 * max by (instance) (reviewbot_poll_interval_seconds), 600)
+          and max by (instance) (reviewbot_poll_last_round_timestamp_seconds) > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "reviewbot: опрос GitLab не выполняется {{ $value | humanizeDuration }}"
+          description: "Ни одного раунда опроса (ни ok, ни error) дольше max(3 × gitlab.poll_interval, 10 минут): новые MR и команды не замечаются. Лог: poller; при зависании — рестарт."
+
+      # Раунды идут, но успешных нет дольше max(3 × gitlab.poll_interval, 5 минут)
+      # (ошибки API, права): два-три раунда подряд с ошибкой при любом интервале.
+      - alert: ReviewbotPollingFailing
+        expr: |
+          time() - max by (instance) (reviewbot_poll_last_success_timestamp_seconds)
+            > clamp_min(3 * max by (instance) (reviewbot_poll_interval_seconds), 300)
+          and max by (instance) (reviewbot_poll_last_success_timestamp_seconds) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: "reviewbot: опрос GitLab без успешных раундов {{ $value | humanizeDuration }}"
+          description: "Нет успешного раунда опроса дольше max(3 × gitlab.poll_interval, 5 минут): хотя бы одна группа из gitlab.groups не опрашивается. Лог: poller: poll failed; доступ токена к группам; /readyz."

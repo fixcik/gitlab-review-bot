@@ -1,0 +1,7 @@
+{
+  "branch": "chore/fix-typo",
+  "title": "chore: опечатка в комментарии WriteJSON",
+  "scenarios": "S1, C1",
+  "description": "Исправлена опечатка «responce».",
+  "expect": "Маленький свежий MR: блок «🌿 Trunk-based» без ⚠️; схемы Mermaid нет (тривиальное изменение); замечаний нет."
+}

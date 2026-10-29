@@ -1,0 +1,7 @@
+{
+  "branch": "api/drop-user-email",
+  "title": "feat: скрыть email в ответе пользователя и добавить список сессий",
+  "scenarios": "J1, J9, L1, U7",
+  "description": "Email больше не отдаём в `GET /api/v1/users/{id}` (персональные данные). `limit` у списка теперь обязателен. Новый эндпоинт `GET /api/v1/users/{id}/sessions`.",
+  "expect": "oasdiff: блокирующие треды (удалено поле ответа `email`, `limit` стал обязательным); свёрнутая сводка «📘 Изменения API» (+1 эндпоинт); ссылка на потребителя `rb-frontend:src/api/client.ts` (L1); после построения карты — блок «🔗 Затронуто…» с `rb-orders-py` для `GET /api/v1/users/{id}` (U7)."
+}

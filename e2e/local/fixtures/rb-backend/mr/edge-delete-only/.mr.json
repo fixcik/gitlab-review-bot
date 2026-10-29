@@ -1,0 +1,8 @@
+{
+  "branch": "edge/delete-only",
+  "title": "chore: удалить устаревший CSV-экспорт",
+  "scenarios": "C9",
+  "description": "MR только удаляет файл.",
+  "delete": ["internal/users/export.go"],
+  "expect": "MR только с удалёнными файлами: ревью без падения (замечания на удалённых строках, если есть, привязаны корректно)."
+}

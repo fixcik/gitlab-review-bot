@@ -1,0 +1,656 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<meta name="color-scheme" content="light dark">
+<title>Карта системы · ревью-бот</title>
+<script nonce="{{NONCE}}">
+try { var t0 = localStorage.getItem("reviewbot-usage-theme"); if (t0 === "light" || t0 === "dark") document.documentElement.setAttribute("data-theme", t0); } catch (e) {}
+(function () { var l = document.createElement("link"); l.rel = "icon"; l.href = "data:image/svg+xml," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><rect width="16" height="16" rx="4" fill="#7b58cf"/><path d="M8 3.5 12 6v4l-4 2.5L4 10V6z" fill="none" stroke="#fff" stroke-width="1.6"/></svg>'); document.head.appendChild(l); })();
+</script>
+<style nonce="{{NONCE}}">
+{{COMMON_CSS}}
+{{MAP_CSS}}
+</style>
+</head>
+<body>
+{{HEADER}}
+
+<main id="main" aria-busy="true">
+  <div class="head">
+    <div>
+      <h1>Карта системы</h1>
+      <p class="range" id="range">Загрузка…</p>
+    </div>
+    <div class="controls">
+      <button type="button" class="btn icon" id="reload" aria-label="Обновить данные" title="Обновить">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9"/><path d="M12.5 1.75v2.75H9.75"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <div class="banner" id="error" role="alert" hidden>
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 1a7 7 0 1 1 0 14A7 7 0 0 1 8 1Zm0 9.5a1 1 0 1 0 0 2 1 1 0 0 0 0-2ZM8 4a.9.9 0 0 0-.9.95l.2 4.1a.7.7 0 0 0 1.4 0l.2-4.1A.9.9 0 0 0 8 4Z"/></svg>
+    <div><h2>Не удалось загрузить данные</h2><p id="error-text"></p></div>
+  </div>
+
+  <section class="kpis k5" aria-label="Итоги">
+    <div class="kpi"><div class="lbl">Репозитории</div><div class="val" id="k-repos"><span class="sk big"></span></div><div class="sub" id="k-repos-sub">&nbsp;</div></div>
+    <div class="kpi"><div class="lbl">Контракты</div><div class="val" id="k-contracts"><span class="sk big"></span></div><div class="sub" id="k-contracts-sub">&nbsp;</div></div>
+    <div class="kpi"><div class="lbl">Связи</div><div class="val" id="k-edges"><span class="sk big"></span></div><div class="sub" id="k-edges-sub">&nbsp;</div></div>
+    <a class="kpi" href="#h-act"><div class="lbl">Требуют действия</div><div class="val" id="k-act"><span class="sk big"></span></div><div class="sub" id="k-act-sub">&nbsp;</div></a>
+    <div class="kpi"><div class="lbl">Извлечение, 30 дней</div><div class="val" id="k-cost"><span class="sk big"></span></div><div class="sub" id="k-cost-sub">&nbsp;</div></div>
+  </section>
+
+  <section class="card" aria-labelledby="h-graph">
+    <div class="card-h">
+      <div class="ttl"><h2 id="h-graph">Кто кого вызывает</h2><span class="hint">блок — репозиторий, стрелка — от вызывающего к провайдеру с числом вызовов, внизу — внешние системы</span></div>
+      <div class="toolbar" id="proto-bar" aria-label="Протоколы на графе">
+        <select id="f-proto" multiple aria-label="Протоколы" data-label="Протоколы" data-placeholder="все">
+          <option value="http" data-swatch="s-in">HTTP</option>
+          <option value="webhook" data-swatch="s-out">вебхуки</option>
+          <option value="ws" data-swatch="s-cr">WebSocket</option>
+          <option value="sse" data-swatch="s-cw">SSE</option>
+        </select>
+      </div>
+    </div>
+    <div class="g-body">
+      <p class="g-sum" id="graph-sum"></p>
+      <div class="g-tools"><ul class="g-key" id="graph-key" aria-hidden="true"></ul>
+      </div>
+      <div class="gwrap" id="graph"></div>
+      <p class="note" id="graph-off" hidden>Схема не нарисована: библиотека раскладки не загрузилась. Те же связи — в «Таблице связей» ниже.</p>
+      <div class="dpanel" id="gpanel" role="region" aria-label="Подробности связи или репозитория" aria-live="polite" hidden></div>
+    </div>
+    <div class="iso" id="iso" hidden></div>
+    <details class="alt">
+      <summary>Таблица связей</summary>
+      <div class="scroll"><table id="t-edges"></table></div>
+    </details>
+  </section>
+
+  <section class="card" aria-labelledby="h-act">
+    <div class="card-h">
+      <div class="ttl"><h2 id="h-act">Требуют действия</h2><span class="count" id="n-act">–</span></div>
+      <div class="toolbar" id="unres-bar" aria-label="Фильтр вызовов, требующих действия" data-collapse="false"><input type="search" id="f-unres" data-label="Найти" placeholder="репозиторий, путь, выражение" size="28" data-debounce="150" aria-label="Фильтр вызовов, требующих действия"></div>
+    </div>
+    <p class="note" id="unres-help">Неразрешённые вызовы (не нашёлся ровно один репозиторий-провайдер) и вызовы, связанные с репозиторием, у которого нет такого эндпоинта. Чтобы связать неразрешённый вызов, выберите провайдера — получится готовый блок <code>review.sysmap.hints</code>. Вызовы сторонних систем сюда не входят — они в блоке «Внешние зависимости».</p>
+    <ul class="act-list" id="act"></ul>
+  </section>
+
+  <section class="card" aria-labelledby="h-ext" id="ext-card">
+    <div class="card-h">
+      <div class="ttl"><h2 id="h-ext">Внешние зависимости</h2><span class="count" id="n-ext">–</span></div>
+      <p class="hint">вызовы сторонних систем: хост виден в коде; в неразрешённые не входят</p>
+    </div>
+    <ul class="act-list" id="ext"></ul>
+    <p class="note">Если хост на самом деле принадлежит сервису команды, добавьте подсказку <code>хост → проект</code> в <code>review.sysmap.hints</code>: вызов станет связью.</p>
+  </section>
+
+  <section class="card" aria-labelledby="h-contracts" id="contracts-card">
+    <div class="card-h">
+      <div class="ttl"><h2 id="h-contracts">Контракты</h2><span class="count" id="n-contracts">–</span></div>
+      <div class="toolbar" id="contracts-bar" aria-label="Фильтры контрактов">
+        <select id="f-repo" aria-label="Репозиторий" data-label="Репозиторий" data-type="search-select"></select>
+        <select id="f-side" aria-label="Сторона" data-label="Сторона" data-clearable="false"><option value="">все</option><option value="provides">предоставляет</option><option value="consumes">вызывает</option></select>
+      </div>
+    </div>
+    <div class="scroll"><table id="t-contracts"></table></div>
+  </section>
+
+  <section class="card" aria-labelledby="h-scan">
+    <div class="card-h"><div class="ttl"><h2 id="h-scan">Сканирование</h2></div><p class="hint">ветка по умолчанию каждого репозитория; обновляется в фоне</p></div>
+    <div class="scan-sum" id="scan-sum"></div>
+    <details class="alt" id="scan-more">
+      <summary>По репозиториям</summary>
+      <div class="scroll"><table id="t-scan"></table></div>
+    </details>
+  </section>
+
+  <section class="card" aria-labelledby="h-hints">
+    <div class="card-h"><div class="ttl"><h2 id="h-hints">Подсказки</h2><span class="count" id="n-hints">–</span></div><p class="hint"><code>review.sysmap.hints</code>: переменная или выражение адреса → проект</p></div>
+    <ul class="hints" id="hints"></ul>
+    <p class="note">Новую подсказку удобнее собрать в блоке «Требуют действия»: там уже подставлены выражение адреса и кандидаты.</p>
+  </section>
+
+  <section class="card" aria-labelledby="h-topo">
+    <div class="card-h"><div class="ttl"><h2 id="h-topo">Топология</h2><span class="count" id="n-topo">–</span></div><p class="hint"><code>review.sysmap.topology</code>: кто кого вызывает и по каким протоколам</p></div>
+    <ul class="hints" id="topo"></ul>
+    <p class="note">Правило — последний шаг сопоставления: оно связывает только вызовы, которые не нашлись в коде (путь, событие, подсказка, внешняя система). Такие вызовы не неразрешённые, но и не найденные в коде: на графе — пунктир с подписью «по правилу», в таблице связей — своя колонка.</p>
+  </section>
+
+  <p class="note"><b>Что здесь:</b> контракты между репозиториями групп — HTTP-эндпоинты, вебхуки, WebSocket и SSE, — извлечённые из веток по умолчанию:
+  спецификации OpenAPI разбираются напрямую, код читает лёгкая модель. Вызов сопоставляется с провайдером по методу и пути (с точностью до параметров и префиксов
+  <code>/api</code>, <code>/api/vN</code>, <code>/vN</code>), по подсказкам или по имени события; ничего не угадывается. Вызов сторонней системы (хост вне репозиториев виден в коде) считается внешним, а не неразрешённым. Строки на странице — из кода репозиториев и показаны как текст.</p>
+</main>
+
+<script nonce="{{NONCE}}" src="{{ELK}}"></script>
+<script nonce="{{NONCE}}" src="{{FILTERS}}"></script>
+<script nonce="{{NONCE}}">
+{{COMMON_JS}}
+</script>
+<script nonce="{{NONCE}}" src="{{MAPJS}}"></script>
+<script nonce="{{NONCE}}">
+(function () {
+  "use strict";
+  var $ = D.$, h = D.h, clear = D.clear, add = D.add;
+  D.initTheme();
+  var data = null, seq = 0;
+  var REPO_KEY = "reviewbot-map-repo";
+  var PROTOS = ["http", "webhook", "ws", "sse"];
+  var PROTO = { http: "HTTP", webhook: "вебхук", ws: "WebSocket", sse: "SSE" };
+  var PROTO_PL = { http: "HTTP", webhook: "вебхуки", ws: "WebSocket", sse: "SSE" };
+  var VIA = { path: "по пути", prefix: "по пути без префикса", hint: "по подсказке", pair: "по событию в связанной паре", event: "по имени события",
+    "event-suffix": "по окончанию имени события", topology: "по правилу топологии", "topology-edge": "по правилу топологии, без эндпоинта" };
+  var STATUS = { ok: ["ok", "готово"], partial: ["postponed", "частично"], error: ["failed", "ошибка"] };
+  // per load: repo by path, contract by id, endpoint by contract id
+  var REPO = {}, BYID = {}, EPOF = {}, GROUP = "";
+
+  $("reload").addEventListener("click", function () { load(); });
+  // Filter bars (D.filters) over the native controls; the controls keep the
+  // values and fire "change", so the listeners below work with or without them.
+  var contractsBar = D.filters.enhance($("contracts-bar"));
+  var protoBar = D.filters.enhance($("proto-bar"));
+  D.filters.enhance($("unres-bar"));
+  $("f-unres").addEventListener("input", function () { if (data) renderActions(); });
+  $("f-unres").addEventListener("change", function () { if (data) renderActions(); });
+  $("f-repo").addEventListener("change", function () { try { localStorage.setItem(REPO_KEY, $("f-repo").value); } catch (e) {} if (data) { renderSideCounts(); renderContracts(); } });
+  $("f-side").addEventListener("change", function () { if (data) renderContracts(); });
+  $("f-proto").addEventListener("change", function () { if (data) renderGraph(); });
+
+  function load() {
+    var my = ++seq;
+    document.body.classList.add("busy");
+    fetch("/map/data.json", { credentials: "same-origin", headers: { Accept: "application/json" } })
+      .then(function (r) {
+        if (!r.ok) return r.text().then(function (t) { throw new Error(r.status + ": " + t.trim()); });
+        return r.json();
+      })
+      .then(function (d) { if (my !== seq) return; data = d; $("error").hidden = true; index(); render(); })
+      .catch(function (e) { if (my !== seq) return; $("error-text").textContent = String(e.message || e); $("error").hidden = false; })
+      .then(function () { if (my !== seq) return; document.body.classList.remove("busy"); $("main").setAttribute("aria-busy", "false"); });
+  }
+
+  // ---- model -------------------------------------------------------------------
+  function index() {
+    REPO = {}; BYID = {}; EPOF = {};
+    data.repos.forEach(function (r) { REPO[r.path] = r; r.peersIn = {}; r.peersOut = {}; r.inCalls = 0; });
+    data.contracts.forEach(function (c) { BYID[c.id] = c; });
+    data.unresolved.concat(data.no_endpoint).forEach(function (c) { if (!BYID[c.id]) BYID[c.id] = c; });
+    data.external.forEach(function (g) { g.sites.forEach(function (c) { if (!BYID[c.id]) BYID[c.id] = c; }); });
+    data.endpoints.forEach(function (e) { e.contracts.forEach(function (id) { EPOF[id] = e; }); });
+    data.edges.forEach(function (e) {
+      if (REPO[e.from]) REPO[e.from].peersOut[e.to] = e;
+      if (REPO[e.to]) { REPO[e.to].peersIn[e.from] = e; REPO[e.to].inCalls += e.total; }
+    });
+    // A common group prefix ("group/") is dropped from the names on the graph.
+    var paths = data.repos.map(function (r) { return r.path; }), p = paths[0] || "", g = p.slice(0, p.lastIndexOf("/") + 1);
+    GROUP = g && paths.every(function (x) { return x.indexOf(g) === 0; }) ? g : "";
+  }
+  function sn(p) { return p && GROUP && p.indexOf(GROUP) === 0 ? p.slice(GROUP.length) : p; }
+  function linked(r) { return Object.keys(r.peersIn).length + Object.keys(r.peersOut).length > 0; }
+
+  // ---- small renderers -----------------------------------------------------------
+  function proto(p) { return h("span", { class: "proto p-" + p, text: PROTO[p] || p }); }
+  function ctr(c) {
+    return h("span", { class: "ctr" }, [c.method ? h("span", { class: "meth", text: c.method }) : null, c.path ? h("span", { class: "p", text: c.path }) : null,
+      c.event ? h("span", { class: "ev", text: (c.path ? "· " : "") + c.event }) : null, !c.method && !c.path && !c.event ? "—" : null]);
+  }
+  function name(c) { return [c.method, c.path, c.event].filter(Boolean).join(" ") || "—"; }
+  function loc(c) {
+    var href = D.safeHref(c.url), t = c.file + (c.line ? ":" + c.line : "");
+    return href ? h("a", { class: "loc", href: href, rel: "noopener noreferrer", target: "_blank", title: c.repo + ":" + t, text: t }) : h("span", { class: "loc", title: c.repo + ":" + t, text: t });
+  }
+  function badge(status) {
+    var s = STATUS[status] || ["skipped", status || "—"];
+    return h("span", { class: "badge b-" + s[0], text: s[1] });
+  }
+  function st(kind, text) { return h("span", { class: "st " + kind }, [h("i"), text]); }
+  function sources(ids) {
+    var k = {};
+    ids.forEach(function (id) { var c = BYID[id]; if (c) k[c.source === "openapi" ? "OpenAPI" : "код"] = 1; });
+    return h("span", { class: "src" }, Object.keys(k).sort().reverse().map(function (x) { return h("span", { text: x }); }));
+  }
+
+  function render() {
+    var d = data;
+    $("range").textContent = d.built_at && !D.zero(d.built_at)
+      ? "Собрана " + D.dateTime(d.built_at) + (GROUP ? " · группа " + GROUP.replace(/\/$/, "") : "") + " · обновляется в фоне после новых коммитов в ветках по умолчанию"
+      : "Карта ещё не собрана: первое сканирование идёт в фоне.";
+    var scanned = d.repos.filter(function (r) { return r.in_map; });
+    var nLinked = scanned.filter(linked).length, notOk = scanned.filter(function (r) { return r.status !== "ok"; }).length;
+    $("k-repos").textContent = D.full(scanned.length);
+    $("k-repos-sub").textContent = D.full(nLinked) + " связаны · " + D.full(scanned.length - nLinked) + " без связей" + (notOk ? " · " + D.full(notOk) + " не готовы" : "");
+    var eps = 0, cons = 0;
+    d.repos.forEach(function (r) { eps += r.endpoints; cons += r.consumes; });
+    $("k-contracts").textContent = D.full(d.contracts_total);
+    $("k-contracts-sub").textContent = D.full(eps) + " " + D.plural(eps, "эндпоинт", "эндпоинта", "эндпоинтов") + " · " + D.full(cons) + " " + D.plural(cons, "вызов", "вызова", "вызовов") +
+      (d.external_total ? " (" + D.full(d.external_total) + " " + D.plural(d.external_total, "внешний", "внешних", "внешних") + ")" : "");
+    var calls = 0, byRule = 0;
+    d.edges.forEach(function (e) { calls += e.total; byRule += e.rule_total || 0; });
+    $("k-edges").textContent = D.full(d.edges.length);
+    $("k-edges-sub").textContent = D.full(calls) + " " + D.plural(calls, "сопоставленный вызов", "сопоставленных вызова", "сопоставленных вызовов") +
+      (byRule ? " · " + D.full(byRule) + " по правилу" : "");
+    var act = d.unresolved_total + d.no_endpoint_total;
+    $("k-act").textContent = D.full(act);
+    $("k-act").classList.toggle("bad", act > 0);
+    $("k-act-sub").textContent = act ? D.full(d.unresolved_total) + " " + D.plural(d.unresolved_total, "неразрешённый", "неразрешённых", "неразрешённых") + " · " +
+      D.full(d.no_endpoint_total) + " без эндпоинта у провайдера" : "все вызовы сопоставлены";
+    var c = d.cost;
+    $("k-cost").textContent = D.usd(c.cost_usd_30d);
+    // all time is shown only when it differs from the 30 days
+    $("k-cost-sub").textContent = D.full(c.runs_30d) + " " + D.plural(c.runs_30d, "запуск", "запуска", "запусков") + (c.failed_30d ? " (ошибок: " + c.failed_30d + ")" : "") +
+      (c.tokens_30d ? " · " + D.short(c.tokens_30d) + " токенов" : "") + " · за час " + c.runs_last_hour + " из " + c.max_runs_per_hour +
+      (Math.abs(c.cost_usd_all - c.cost_usd_30d) >= 0.0005 || c.runs_all !== c.runs_30d ? " · всего " + D.usd(c.cost_usd_all) + " (усл.)" : "");
+    closePanel();
+    renderProtoCounts();
+    renderGraph();
+    renderIsolated();
+    renderEdges();
+    renderActions();
+    renderExternal();
+    renderRepoSelect();
+    renderSideCounts();
+    renderContracts();
+    renderScan();
+    renderHints();
+    renderTopology();
+  }
+
+  // ---- graph -----------------------------------------------------------------------
+  function renderProtoCounts() {
+    PROTOS.forEach(function (p, i) {
+      var n = data.edges.filter(function (e) { return e.counts[p] || (e.rule_counts && e.rule_counts[p]); }).length;
+      $("f-proto").options[i].setAttribute("data-count", String(n));
+    });
+    if (protoBar) protoBar.refresh();
+  }
+  function shownProtos() {
+    var sel = {}, any = false;
+    D.each($("f-proto").options, function (o) { if (o.selected) { sel[o.value] = true; any = true; } });
+    if (!any) PROTOS.forEach(function (p) { sel[p] = true; });
+    return sel;
+  }
+  // ---- diagram (MapGraph: SVG laid out by elkjs) ------------------------------------------------
+  // inDiagram: repositories with links to others or to external systems.
+  var EXTOF = {};
+  function inDiagram(r) { return linked(r) || !!EXTOF[r.path]; }
+  function role(r) {
+    if (!r.in_map) return "вне карты";
+    return r.provides && r.consumes ? "сервис" : r.provides ? "провайдер" : r.consumes ? "клиент" : "репозиторий";
+  }
+  function renderGraph() {
+    var d = data, el = $("graph"), protos = shownProtos();
+    EXTOF = {};
+    var ext = d.external.map(function (g) {
+      g.repos.forEach(function (r) { EXTOF[r.repo] = true; });
+      return { id: "ext:" + (g.host || g.service), label: g.service || g.host, sub: g.service ? g.host : "", group: g };
+    });
+    var extEdges = [];
+    d.external.forEach(function (g) { g.repos.forEach(function (r) { extEdges.push({ from: r.repo, to: "ext:" + (g.host || g.service), total: r.count, group: g }); }); });
+    var nodes = d.repos.filter(inDiagram).map(function (r) {
+      return { id: r.path, label: sn(r.path), role: role(r), muted: !r.in_map,
+        warn: r.unresolved ? r.unresolved + " неразр." : "",
+        stats: r.in_map ? ["↙ " + D.full(r.endpoints) + " " + D.plural(r.endpoints, "эндпоинт", "эндпоинта", "эндпоинтов") + " · входящих " + D.full(r.inCalls),
+          "↗ " + D.full(r.consumes) + " " + D.plural(r.consumes, "вызов", "вызова", "вызовов") + (r.external ? " · внешних " + D.full(r.external) : "")] : ["только цель вызовов"] };
+    });
+    var top = d.edges.slice().sort(function (a, b) { return b.total - a.total; })[0];
+    $("graph-sum").textContent = nodes.length
+      ? D.full(d.edges.length) + " " + D.plural(d.edges.length, "связь", "связи", "связей") + " между " + D.full(nodes.length) + " " + D.plural(nodes.length, "репозиторием", "репозиториями", "репозиториями") +
+        (top && top.total ? "; больше всего вызовов " + sn(top.from) + " → " + sn(top.to) + " (" + top.total + ")" : "") + (ext.length ? "; внешних систем: " + ext.length : "") +
+        ". Наведите на блок или стрелку — подсветятся связи; нажмите (или Tab и Enter) — эндпоинты и файлы-вызывающие, Esc закрывает."
+      : "Связей пока нет: карта ещё собирается, или вызовы не сопоставлены (см. «Требуют действия»).";
+    var key = $("graph-key"); clear(key);
+    function swatch(cls, label) {
+      var svg = document.createElementNS("http://www.w3.org/2000/svg", "svg"), ln = document.createElementNS("http://www.w3.org/2000/svg", "path");
+      svg.setAttribute("width", "26"); svg.setAttribute("height", "8"); svg.setAttribute("viewBox", "0 0 26 8");
+      ln.setAttribute("d", "M2 4 H24"); ln.setAttribute("class", cls); svg.appendChild(ln);
+      key.appendChild(h("li", null, [svg, label]));
+    }
+    if (nodes.length) {
+      PROTOS.forEach(function (p) { if (protos[p]) swatch("k-" + p, PROTO_PL[p]); });
+      if (d.edges.some(function (e) { return e.rule_total; })) swatch("k-rule", "по правилу топологии");
+      if (ext.length) swatch("k-ext", "к внешней системе");
+    }
+    el.hidden = !nodes.length;
+    if (!nodes.length) { closePanel(); return; }
+    MapGraph.draw(el, { nodes: nodes, ext: ext, edges: d.edges, extEdges: extEdges, protos: protos,
+      onNode: openNode, onEdge: openEdge, onClose: closePanel }).then(function (ok) {
+      if (!ok) { el.hidden = true; $("graph-off").hidden = false; }
+    }, function () { el.hidden = true; $("graph-off").hidden = false; });
+  }
+
+  // ---- details panel: a block or an arrow ---------------------------------------------------
+  var PANEL_MAX = 40;
+  function closePanel() { var p = $("gpanel"); clear(p); p.hidden = true; }
+  document.addEventListener("keydown", function (ev) { if (ev.key === "Escape" && !$("gpanel").hidden) closePanel(); });
+  function panel(title, sub, kids, extra) {
+    var p = $("gpanel"); clear(p);
+    var close = h("button", { type: "button", class: "btn sm", text: "Закрыть" });
+    close.addEventListener("click", closePanel);
+    add(p, [h("div", { class: "row1" }, [h("h3", { text: title }), sub ? h("span", { class: "muted", text: sub }) : null, h("span", { class: "spacer" })].concat(extra || [], [close]))].concat(kids));
+    p.hidden = false;
+  }
+  function more(n, shown) { return n > shown ? h("li", { class: "muted", text: "и ещё " + (n - shown) + " — в таблице контрактов ниже" }) : null; }
+  function openNode(id) {
+    var r = REPO[id];
+    if (!r) return;
+    var eps = data.endpoints.filter(function (e) { return e.repo === id; });
+    var list = eps.slice(0, PANEL_MAX).map(function (e) {
+      var c0 = BYID[e.contracts[0]];
+      return h("li", null, [proto(e.protocol), c0 ? ctr(c0) : null, callerChips(e), c0 ? loc(c0) : null]);
+    });
+    var incoming = Object.keys(r.peersIn).sort().map(function (p) {
+      var e = r.peersIn[p];
+      return h("span", { class: "rchip", title: p }, [sn(p), h("span", { class: "n", text: (e.total ? e.total : "") + (e.rule_total ? (e.total ? " + " : "") + e.rule_total + " по правилу" : "") })]);
+    });
+    var go = h("button", { type: "button", class: "btn sm", text: "Контракты репозитория" });
+    go.addEventListener("click", function () { showContracts(r.path); });
+    panel(r.path, role(r) + (r.spec_only ? " · эндпоинты только по спецификации" : "") + (r.unresolved ? " · " + r.unresolved + " неразрешённых" : ""), [
+      h("div", { class: "pl" }, [h("b", { text: "Входящие вызовы: " })].concat(incoming.length ? incoming : [h("span", { class: "muted", text: "нет" })])),
+      h("b", { text: "Эндпоинты · " + eps.length }),
+      h("ul", null, list.length ? list.concat([more(eps.length, list.length)]) : [h("li", { class: "muted", text: "Эндпоинтов не найдено." })])
+    ], [go]);
+  }
+  function openEdge(it) {
+    var from = it.from, to = it.to;
+    if (it.kind === "ext") {
+      var g = it.edge.group, sites = g.sites.filter(function (c) { return c.repo === from; });
+      panel(sn(from) + " → " + (g.service || g.host), (g.host ? g.host + " · " : "") + it.edge.total + " " + D.plural(it.edge.total, "место", "места", "мест") + " в коде", [
+        h("ul", null, sites.slice(0, PANEL_MAX).map(function (c) { return h("li", null, [proto(c.protocol), ctr(c), loc(c)]); }).concat([more(sites.length, Math.min(sites.length, PANEL_MAX))]))]);
+      return;
+    }
+    var status = it.kind === "rule" ? "topology" : "resolved";
+    var calls = data.contracts.filter(function (c) { return c.side === "consumes" && c.repo === from && c.target === to && c.status === status && it.ps.indexOf(c.protocol) >= 0; });
+    var groups = {}, order = [];
+    calls.forEach(function (c) {
+      var p = (c.lands || []).map(function (id) { return BYID[id]; }).filter(Boolean)[0], k = c.protocol + " " + (p ? name(p) : name(c));
+      if (!groups[k]) { groups[k] = { p: p, c: c, calls: [] }; order.push(k); }
+      groups[k].calls.push(c);
+    });
+    var items = order.slice(0, PANEL_MAX).map(function (k) {
+      var g = groups[k];
+      return h("li", { class: "ep" }, [h("div", { class: "ep-h" }, [proto(g.c.protocol), ctr(g.p || g.c), g.p ? loc(g.p) : h("span", { class: "muted", text: it.kind === "rule" ? "эндпоинт не известен (по правилу)" : "" })]),
+        h("div", { class: "ep-c" }, [h("span", { class: "muted", text: "вызывают:" })].concat(g.calls.slice(0, 8).map(loc), g.calls.length > 8 ? [h("span", { class: "muted", text: "и ещё " + (g.calls.length - 8) })] : []))]);
+    });
+    panel(sn(from) + " → " + sn(to), it.label + (it.kind === "rule" ? " · связано правилом review.sysmap.topology, не найдено в коде" : ""), [
+      h("ul", null, items.length ? items.concat([more(order.length, items.length)]) : [h("li", { class: "muted", text: "Вызовы не попали в список контрактов (он ограничен)." })])]);
+  }
+  function renderIsolated() {
+    var el = $("iso"); clear(el);
+    var rest = data.repos.filter(function (r) { return r.in_map && !inDiagram(r); });
+    var idle = rest.filter(function (r) { return r.provides > 0; }), calls = rest.filter(function (r) { return !r.provides && r.consumes > 0; }), none = rest.filter(function (r) { return !r.provides && !r.consumes; });
+    el.hidden = !rest.length;
+    if (!rest.length) return;
+    el.appendChild(h("div", { class: "lbl", text: "Вне схемы · " + rest.length }));
+    function chip(r, n) {
+      var b = h("button", { type: "button", class: "rchip", title: r.path }, [sn(r.path), n ? h("span", { class: "n", text: n }) : null]);
+      b.addEventListener("click", function () { showContracts(r.path); });
+      return b;
+    }
+    if (idle.length) el.appendChild(h("div", { class: "grp" }, [h("span", { text: "Предоставляют, но никто не вызывает:" })].concat(idle.map(function (r) { return chip(r, "↙" + r.endpoints + (r.spec_only ? " · только по спецификации" : "")); }))));
+    if (calls.length) el.appendChild(h("div", { class: "grp" }, [h("span", { text: "Вызывают, но не связаны:" })].concat(calls.map(function (r) { return chip(r, "↗" + r.consumes); }))));
+    if (none.length) el.appendChild(h("div", { class: "grp" }, [h("span", { text: "Контрактов не найдено:" })].concat(none.map(function (r) {
+      return h("span", { class: "rchip", title: r.path + " · файлов-кандидатов: " + r.candidates + ", OpenAPI: " + r.specs, text: sn(r.path) });
+    }))));
+  }
+  function renderEdges() {
+    var t = $("t-edges"); clear(t);
+    t.appendChild(h("thead", null, h("tr", null, [h("th", { text: "Вызывающий" }), h("th", { text: "Провайдер" }), h("th", { class: "num", text: "HTTP" }),
+      h("th", { class: "num", text: "Вебхуки" }), h("th", { class: "num", text: "WebSocket" }), h("th", { class: "num", text: "SSE" }), h("th", { class: "num", text: "Всего" }), h("th", { class: "num", text: "По правилу" })])));
+    var body = h("tbody");
+    data.edges.forEach(function (e) {
+      body.appendChild(h("tr", null, [h("td", { text: e.from }), h("td", { text: e.to }), h("td", { class: "num", text: e.counts.http || "" }),
+        h("td", { class: "num", text: e.counts.webhook || "" }), h("td", { class: "num", text: e.counts.ws || "" }), h("td", { class: "num", text: e.counts.sse || "" }),
+        h("td", { class: "num", text: e.total || "" }), h("td", { class: "num", title: "вызовы, связанные правилом топологии", text: e.rule_total || "" })]));
+    });
+    if (!body.firstChild) body.appendChild(h("tr", { class: "empty-row" }, h("td", { colspan: "8", text: "Связей нет" })));
+    t.appendChild(body);
+  }
+
+  // ---- actions ------------------------------------------------------------------------
+  function matches(c, q) {
+    if (!q) return true;
+    return [c.repo, c.file, c.method, c.path, c.event, c.raw, c.base, c.reason, c.target].concat(c.candidates || []).join(" ").toLowerCase().indexOf(q) >= 0;
+  }
+  function copy(text, btn) {
+    var label = btn.textContent;
+    function done() { btn.textContent = "Скопировано"; setTimeout(function () { btn.textContent = label; }, 1400); }
+    function fallback() {
+      var ta = h("textarea", { class: "sr", readonly: true }); ta.value = text; document.body.appendChild(ta); ta.select();
+      try { document.execCommand("copy"); } catch (e) {}
+      document.body.removeChild(ta); done();
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done, fallback); else fallback();
+  }
+  // hintFix: pick a provider among the candidates -> the whole hints block.
+  function hintFix(c) {
+    var key = c.base, pick = c.candidates[0];
+    var pickRow = h("div", { class: "pick", role: "group", "aria-label": "Провайдер для " + key }, [h("span", { class: "muted", text: "Провайдер для " }), h("code", { text: key }), h("span", { class: "muted", text: ":" })]);
+    var pre = h("pre", { class: "hint-snip" }), btn = h("button", { type: "button", class: "btn sm", text: "Копировать" });
+    function paint() {
+      clear(pre);
+      MapGraph.snippet(data.hints, key, pick).lines.forEach(function (l) {
+        if (l.kind === "new") pre.appendChild(h("span", { class: "new", text: l.text }));
+        else add(pre, [l.text, l.kind === "old" ? h("span", { class: "cm", text: "   # уже есть" }) : null]);
+        pre.appendChild(document.createTextNode("\n"));
+      });
+      D.each(pickRow.querySelectorAll("button"), function (b) { b.setAttribute("aria-pressed", String(b.getAttribute("data-r") === pick)); });
+    }
+    c.candidates.forEach(function (r) {
+      var b = h("button", { type: "button", "data-r": r, title: r, text: sn(r) });
+      b.addEventListener("click", function () { pick = r; paint(); });
+      pickRow.appendChild(b);
+    });
+    btn.addEventListener("click", function () { copy(MapGraph.snippet(data.hints, key, pick).text, btn); });
+    paint();
+    return h("div", { class: "fix" }, [pickRow, h("div", { class: "snip" }, [pre, btn]),
+      h("p", { class: "snip-note", text: "Блок заменяет весь review.sysmap.hints в конфиге, поэтому в нём есть и уже настроенные подсказки. После рестарта карта пересоберётся без новых запусков модели." })]);
+  }
+  function landsText(c) {
+    var out = [];
+    (c.lands || []).forEach(function (id) { var p = BYID[id]; if (p) out.push(sn(p.repo) + ": " + name(p) + " (" + p.file + (p.line ? ":" + p.line : "") + ")"); });
+    return out;
+  }
+  function actionItem(c) {
+    var unres = c.status === "unresolved", d = [], fix = null;
+    if (unres) {
+      d.push((c.reason || "не сопоставлено") + (c.candidates && c.candidates.length ? ": " + c.candidates.map(sn).join(", ") : "") + ".");
+      var l = landsText(c);
+      if (l.length) d.push("Такой эндпоинт есть у " + l.join("; ") + ".");
+      if (!c.base) d.push("В вызове нет выражения адреса («базы»), подсказку не к чему привязать: проверьте вызов в коде.");
+      else if (data.max_hint_key && c.base.length > data.max_hint_key) d.push("Выражение адреса длиннее " + data.max_hint_key + " символов — для подсказки возьмите его короткую часть (имя переменной или хоста).");
+      else if (c.candidates && c.candidates.length) { d.push("Адрес берётся из " + c.base + " — подсказка укажет, какой проект за ним стоит."); fix = hintFix(c); }
+      else d.push("Адрес берётся из " + c.base + ": если провайдер есть среди репозиториев, добавьте подсказку " + c.base + " → путь проекта.");
+    } else {
+      var t = REPO[c.target];
+      d.push("Вызов связан " + (VIA[c.via] || c.via) + " с " + c.target + ", но там нет эндпоинта " + name(c) + ".");
+      d.push(t && t.in_map ? "Либо маршрут не извлечён (добавьте его в OpenAPI-спецификацию " + sn(c.target) + "), либо вызов ведёт в несуществующий путь."
+        : c.target + " нет среди отсканированных репозиториев: проверьте путь проекта в подсказке.");
+    }
+    var li = h("li", null, [
+      h("div", { class: "act-h" }, [proto(c.protocol), ctr(c), h("span", { class: "why" + (unres ? "" : " w"), text: unres ? "не сопоставлено" : "нет эндпоинта у " + sn(c.target) }),
+        h("span", { class: "where" }, [h("span", { class: "repo-n", title: c.repo, text: sn(c.repo) }), loc(c)])]),
+      h("div", { class: "act-d", text: d.join(" ") }),
+      c.raw ? h("div", { class: "act-d" }, ["Как написано: ", h("code", { text: c.raw })]) : null
+    ]);
+    if (fix) li.appendChild(fix);
+    return li;
+  }
+  function renderActions() {
+    var q = $("f-unres").value.trim().toLowerCase(), d = data;
+    var all = d.unresolved.concat(d.no_endpoint), rows = all.filter(function (c) { return matches(c, q); });
+    var total = d.unresolved_total + d.no_endpoint_total;
+    $("n-act").textContent = D.full(total) + (all.length < total ? " (показаны " + all.length + ")" : "");
+    $("n-act").classList.toggle("fail", total > 0);
+    var ul = $("act"); clear(ul);
+    rows.forEach(function (c) { ul.appendChild(actionItem(c)); });
+    if (!rows.length) ul.appendChild(h("li", { class: "empty", text: total ? "Ничего не найдено по фильтру." : "Все вызовы сопоставлены, у всех провайдеров есть вызываемые эндпоинты." }));
+  }
+
+  // ---- external dependencies ----------------------------------------------------------------
+  function renderExternal() {
+    var d = data, ul = $("ext"), shown = 0;
+    clear(ul);
+    d.external.forEach(function (g) { shown += g.sites.length; });
+    $("n-ext").textContent = D.full(d.external_total) + (shown < d.external_total ? " (показаны " + shown + ")" : "");
+    d.external.forEach(function (g) {
+      var sites = h("ul", { class: "ext-sites" }, g.sites.map(function (c) {
+        return h("li", null, [proto(c.protocol), ctr(c), h("span", { class: "where" }, [h("span", { class: "repo-n", title: c.repo, text: sn(c.repo) }), loc(c)])]);
+      }));
+      ul.appendChild(h("li", null, [
+        h("div", { class: "act-h" }, [h("b", { class: "ext-n", text: g.service || g.host }), g.service && g.host ? h("code", { class: "ext-host", text: g.host }) : null,
+          h("span", { class: "muted", text: D.full(g.total) + " " + D.plural(g.total, "место", "места", "мест") + " в коде" }),
+          h("span", { class: "where" }, g.repos.map(function (r) { return h("span", { class: "rchip", title: r.repo }, [sn(r.repo), h("span", { class: "n", text: "×" + r.count })]); }))]),
+        g.sites.length ? h("details", { class: "more" }, [h("summary", { text: "Места в коде" + (g.sites.length < g.total ? " (показаны " + g.sites.length + ")" : "") }), sites]) : null
+      ]));
+    });
+    if (!d.external.length) ul.appendChild(h("li", { class: "empty", text: "Вызовов сторонних систем не найдено." }));
+  }
+
+  // ---- contracts ------------------------------------------------------------------------
+  function renderRepoSelect() {
+    var sel = $("f-repo"), cur = sel.value, stored = null;
+    try { stored = localStorage.getItem(REPO_KEY); } catch (e) {}
+    var repos = data.repos.filter(function (r) { return r.provides + r.consumes > 0; });
+    if (!sel.options.length) cur = stored;
+    // nothing chosen yet: the repository with the most contracts, so the list is not empty
+    if (cur === null || (cur && !repos.some(function (r) { return r.path === cur; }))) {
+      cur = repos.slice().sort(function (a, b) { return (b.provides + b.consumes) - (a.provides + a.consumes) || (a.path < b.path ? -1 : 1); }).map(function (r) { return r.path; })[0] || "";
+    }
+    clear(sel);
+    sel.appendChild(h("option", { value: "", text: "все" }));
+    repos.forEach(function (r) { sel.appendChild(h("option", { value: r.path, "data-short-label": sn(r.path), "data-count": String(r.provides + r.consumes), text: r.path })); });
+    sel.value = cur;
+    if (contractsBar) contractsBar.refresh();
+  }
+  function renderSideCounts() {
+    var repo = $("f-repo").value, pe = 0, cn = 0;
+    data.endpoints.forEach(function (e) { if (!repo || e.repo === repo) pe++; });
+    data.contracts.forEach(function (c) { if (c.side === "consumes" && (!repo || c.repo === repo)) cn++; });
+    var o = $("f-side").options;
+    o[1].setAttribute("data-count", String(pe)); o[2].setAttribute("data-count", String(cn));
+    if (contractsBar) contractsBar.refresh();
+  }
+  function showContracts(path) {
+    $("f-repo").value = path;
+    try { localStorage.setItem(REPO_KEY, path); } catch (e) {}
+    if (contractsBar) contractsBar.refresh();
+    renderSideCounts();
+    renderContracts();
+    $("contracts-card").scrollIntoView({ block: "start" });
+  }
+  function callerChips(e) {
+    var n = {}, order = [];
+    e.callers.forEach(function (id) { var c = BYID[id]; if (!c) return; if (!n[c.repo]) { n[c.repo] = 0; order.push(c.repo); } n[c.repo]++; });
+    var kids = order.map(function (r) { return h("span", { title: r, text: "← " + sn(r) + (n[r] > 1 ? " ×" + n[r] : "") }); });
+    if (e.callers_total > e.callers.length) kids.push(h("span", { text: "+" + (e.callers_total - e.callers.length) }));
+    return h("span", { class: "callers" }, kids.length ? kids : [h("span", { class: "none", text: "никто не вызывает" })]);
+  }
+  function callState(c) {
+    if (c.status === "unresolved") return h("span", { class: "link-cell" }, [st("bad", "не сопоставлено"), c.candidates && c.candidates.length ? h("span", { class: "via", text: c.candidates.map(sn).join(", ") }) : null]);
+    if (c.no_endpoint) return h("span", { class: "link-cell" }, [st("warn", "нет эндпоинта у " + sn(c.target)), h("span", { class: "via", text: VIA[c.via] || c.via })]);
+    if (c.status === "internal") return st("mute", "свой эндпоинт");
+    if (c.status === "topology") return h("span", { class: "link-cell" }, [st("rule", "→ " + sn(c.target)), h("span", { class: "via", text: VIA[c.via] || c.via })]);
+    if (c.status === "external") return h("span", { class: "link-cell" }, [st("mute", "внешняя система"), h("span", { class: "via", text: c.external_host })]);
+    return h("span", { class: "link-cell" }, [st("ok", "→ " + sn(c.target)), h("span", { class: "via", text: VIA[c.via] || c.via })]);
+  }
+  function specTag() {
+    return h("span", { class: "spec-tag", title: "Эндпоинт описан только в спецификации OpenAPI/Swagger, а в коде репозитория нет ни одного маршрута: возможно, это копия контракта другого сервиса", text: "только по спецификации" });
+  }
+  function sideCell(repo, text, all) { return h("td", { class: "side" }, [all ? h("span", { class: "repo-n", title: repo, text: sn(repo) }) : null, text]); }
+  function renderContracts() {
+    var repo = $("f-repo").value, side = $("f-side").value, n = 0;
+    var t = $("t-contracts"); clear(t);
+    t.appendChild(h("thead", null, h("tr", null, [h("th", { text: "Сторона" }), h("th", { text: "Протокол" }), h("th", { text: "Контракт" }),
+      h("th", { text: "Связь" }), h("th", { text: "Где" }), h("th", { class: "hide-m", text: "Источник" })])));
+    var body = h("tbody");
+    if (side !== "consumes") data.endpoints.forEach(function (e) {
+      if (repo && e.repo !== repo) return;
+      var c0 = BYID[e.contracts[0]];
+      if (!c0) return;
+      n++;
+      body.appendChild(h("tr", null, [sideCell(e.repo, "предоставляет", !repo), h("td", null, proto(e.protocol)),
+        h("td", null, e.spec_only ? h("span", { class: "ctr-wrap" }, [ctr(c0), specTag()]) : ctr(c0)), h("td", null, callerChips(e)),
+        h("td", null, loc(c0)), h("td", { class: "hide-m" }, sources(e.contracts))]));
+    });
+    if (side !== "provides") data.contracts.forEach(function (c) {
+      if (c.side !== "consumes" || (repo && c.repo !== repo)) return;
+      n++;
+      body.appendChild(h("tr", null, [sideCell(c.repo, "вызывает", !repo), h("td", null, proto(c.protocol)), h("td", { title: c.raw || null }, ctr(c)), h("td", null, callState(c)),
+        h("td", null, loc(c)), h("td", { class: "hide-m" }, sources([c.id]))]));
+    });
+    $("n-contracts").textContent = D.full(n) + (data.contracts.length < data.contracts_total ? " (из первых " + D.full(data.contracts.length) + " из " + D.full(data.contracts_total) + ")" : "");
+    if (!n) body.appendChild(h("tr", { class: "empty-row" }, h("td", { colspan: "6", text: "Нет контрактов." })));
+    t.appendChild(body);
+  }
+
+  // ---- scan status ------------------------------------------------------------------------
+  function skipped(r) {
+    var s = [];
+    if (r.pending) s.push("ждут бюджета: " + r.pending);
+    if (r.capped) s.push("лимит файлов: " + r.capped);
+    if (r.too_large) s.push("крупные: " + r.too_large);
+    if (r.file_errors) s.push("ответ модели не разобран: " + r.file_errors);
+    return s.join(" · ");
+  }
+  function renderScan() {
+    var rows = data.repos.filter(function (r) { return r.in_map; });
+    var notOk = rows.filter(function (r) { return r.status !== "ok"; }).length, skip = 0, err = 0;
+    rows.forEach(function (r) { skip += r.pending + r.capped + r.too_large + r.file_errors; if (r.error) err++; });
+    var last = rows.filter(function (r) { return !D.zero(r.scanned_at); }).sort(function (a, b) { return Date.parse(b.scanned_at) - Date.parse(a.scanned_at); })[0];
+    var sum = $("scan-sum"); clear(sum);
+    if (!rows.length) sum.appendChild(h("span", { class: "muted", text: "Ещё ничего не отсканировано." }));
+    else add(sum, [h("span", { class: "badge " + (notOk ? "b-postponed" : "b-ok"), text: notOk ? notOk + " не готовы" : "все готовы" }),
+      h("span", { text: D.full(rows.length) + " " + D.plural(rows.length, "репозиторий", "репозитория", "репозиториев") + " в карте" }),
+      last ? h("span", { class: "muted", text: "последний — " + sn(last.path) + ", " + D.dateTime(last.scanned_at) }) : null,
+      h("span", { class: skip || err ? "st warn" : "muted", text: skip || err ? [skip ? skip + " файлов пропущено или ждут" : "", err ? err + " с ошибкой" : ""].filter(Boolean).join(" · ") : "пропусков и ошибок разбора нет" })]);
+    $("scan-more").open = $("scan-more").open || notOk > 0 || err > 0;
+    var t = $("t-scan"); clear(t);
+    t.appendChild(h("thead", null, h("tr", null, [h("th", { text: "Репозиторий" }), h("th", { text: "Статус" }), h("th", { text: "Коммит" }), h("th", { text: "Когда" }),
+      h("th", { class: "num", text: "Файлы кода" }), h("th", { class: "num hide-m", text: "OpenAPI" }), h("th", { class: "num hide-m", text: "Контракты" }),
+      h("th", { class: "hide-m", text: "Пропущено" }), h("th", { class: "hide-m", text: "Ошибка" })])));
+    var body = h("tbody");
+    rows.forEach(function (r) {
+      var href = D.safeHref(r.url);
+      body.appendChild(h("tr", null, [
+        h("td", null, href ? h("a", { href: href, rel: "noopener noreferrer", target: "_blank", text: r.path }) : r.path),
+        h("td", null, badge(r.status)), h("td", { class: "mono", text: (r.sha || "").slice(0, 8) + (r.branch ? " (" + r.branch + ")" : "") }),
+        h("td", { text: D.zero(r.scanned_at) ? "—" : D.dateTime(r.scanned_at) }), h("td", { class: "num", text: r.candidates }),
+        h("td", { class: "num hide-m", text: r.specs }), h("td", { class: "num hide-m", text: r.provides + r.consumes }),
+        h("td", { class: "why2 hide-m", text: skipped(r) }), r.error ? h("td", { class: "err hide-m", title: r.error, text: r.error }) : h("td", { class: "hide-m" })
+      ]));
+    });
+    if (!body.firstChild) body.appendChild(h("tr", { class: "empty-row" }, h("td", { colspan: "9", text: "Ещё ничего не отсканировано." })));
+    t.appendChild(body);
+  }
+
+  function renderHints() {
+    var ul = $("hints"); clear(ul);
+    $("n-hints").textContent = D.full(data.hints.length);
+    data.hints.forEach(function (x) {
+      var used = data.contracts.filter(function (c) { return c.via === "hint" && c.target && c.target.toLowerCase() === x.repo.toLowerCase(); }).length;
+      ul.appendChild(h("li", null, [h("code", { text: x.key }), " → ", h("code", { text: x.repo }),
+        h("span", { class: "muted", text: "  · вызовов по подсказкам в " + sn(x.repo) + ": " + used })]));
+    });
+    if (!data.hints.length) ul.appendChild(h("li", { class: "muted", text: "Подсказок нет." }));
+  }
+
+  function renderTopology() {
+    var ul = $("topo"); clear(ul);
+    $("n-topo").textContent = D.full(data.topology.length);
+    data.topology.forEach(function (r) {
+      ul.appendChild(h("li", null, [h("code", { text: r.from }), " → ", h("code", { text: r.to }), " ", h("span", { class: "muted", text: r.via.map(function (p) { return PROTO[p] || p; }).join(", ") }),
+        r.hits ? h("span", { class: "muted", text: "  · связано вызовов: " + D.full(r.hits) })
+          : h("span", null, [" · ", h("span", { class: "st warn", title: "Все такие вызовы уже нашлись в коде, их нет, или для репозитория и протокола правила называют несколько получателей", text: "правило не сработало" })])]));
+    });
+    if (!data.topology.length) ul.appendChild(h("li", { class: "muted", text: "Правил нет: связи только по коду, подсказкам и событиям." }));
+  }
+
+  load();
+})();
+</script>
+</body>
+</html>

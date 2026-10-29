@@ -1,0 +1,10 @@
+# reviewbot settings of rb-php (local stand). PHPStan runs in CI (job
+# "phpstan"); the bot reads its report from the job artifacts (lint.ci).
+language: ru
+coverage:
+  job: "tests"
+  path: "build/clover.xml"
+lint:
+  ci:
+    - job: phpstan
+      artifact: phpstan.json

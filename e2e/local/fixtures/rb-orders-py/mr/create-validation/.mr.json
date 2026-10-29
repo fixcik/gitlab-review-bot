@@ -1,0 +1,7 @@
+{
+  "branch": "feat/create-order-validation",
+  "title": "feat: проверка позиций и сумма в копейках при создании заказа",
+  "scenarios": "U6, S5",
+  "description": "`POST /orders`: пустой список позиций — 422; в ответе `total_cents` (целое) вместо `total`.",
+  "expect": "В саммари блок «🔗 Затронуто в других репозиториях» с `rb-web` и ссылками на строки (`createOrder`, использование `total`); в `/runs` раздел «System map» с путями `/repos/reviewbot-sandbox/rb-web/...`; замечание на изменённой строке со ссылкой на использование в rb-web."
+}

@@ -1,0 +1,9 @@
+{
+  "branch": "fix/release-limit",
+  "from": "release",
+  "target": "release",
+  "title": "fix: ограничить limit сверху 200 в релизной ветке",
+  "scenarios": "C13, L8",
+  "description": "Хотфикс в ветку `release` (не ветка по умолчанию).",
+  "expect": "MR в не-дефолтную ветку: `.reviewbot.yaml` берётся из `release`, ревью работает. Для L8 (`gitlab.main_branch: release`): ветка `release` есть только у rb-backend и rb-frontend."
+}

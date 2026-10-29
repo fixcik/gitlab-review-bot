@@ -1,0 +1,130 @@
+# Sandbox image for Claude review runs and the bot's own checkers.
+#
+#   docker build -f Dockerfile.sandbox -t reviewbot-sandbox:latest .
+#
+# Two kinds of containers start from this image (docs/security.md):
+#   - review: `claude -p` with read-only tools only (Read, Grep, Glob, scoped
+#     to the mounted inputs; no Bash): it needs node, the Claude Code CLI,
+#     ripgrep (its Grep tool) and git (Claude Code reads the repository
+#     state);
+#   - exec: the bot's deterministic checkers with --network none and no
+#     credentials: gitleaks (secrets; git for the MR commits) and the compat
+#     checkers oasdiff, oas2to3, buf, graphql-inspector.
+# Nothing in the image is there for the model or the repository to run: no
+# language runtimes or build toolchains (Go, PHP, Python, make/gcc), no
+# Composer, no linters (their results come from CI reports, lint.ci), no
+# bubblewrap/socat, no diffcov. curl is used only in the download stage.
+#
+# The bot starts containers with an arbitrary --user uid:gid, a read-only
+# root filesystem, tmpfs on /tmp and $HOME (/home/claude), the checkout at
+# /work and read-only mounts at /base, /repos and /skills. Nothing here may
+# assume a particular uid or a writable home directory baked into the image.
+
+ARG GO_VERSION=1.27
+ARG NODE_VERSION=22
+
+# oas2to3: Swagger 2.0 -> OpenAPI 3.0 converter for the compat check (oasdiff
+# only diffs OpenAPI 3.x). tools/oas2to3 is a separate Go module (kin-openapi
+# openapi2conv). Its go.sum is complete; with -mod=mod an entry that is still
+# missing would be resolved here at build time and verified against
+# sum.golang.org (default GOSUMDB). Only the static binary reaches the image.
+FROM golang:${GO_VERSION}-bookworm AS oas2to3
+WORKDIR /src
+COPY tools/oas2to3/ ./
+RUN CGO_ENABLED=0 GOFLAGS=-mod=mod go build -trimpath -ldflags="-s -w" -o /out/oas2to3 .
+
+# Release binaries, downloaded and verified here so curl stays out of the
+# final image.
+#   - oasdiff: release tarball oasdiff_<ver>_linux_<arch>.tar.gz, verified
+#     against the release checksums.txt (same scheme as oasdiff's install.sh).
+#   - gitleaks: release tarball gitleaks_<ver>_linux_<x64|arm64>.tar.gz,
+#     verified against gitleaks_<ver>_checksums.txt of the same release.
+FROM debian:bookworm-slim AS fetch
+ARG OASDIFF_VERSION=1.34.1
+ARG GITLEAKS_VERSION=8.30.0
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends ca-certificates curl \
+ && rm -rf /var/lib/apt/lists/*
+RUN set -eu; \
+    arch="$(dpkg --print-architecture)"; \
+    case "$arch" in amd64) glarch=x64;; arm64) glarch=arm64;; *) echo "unsupported arch $arch" >&2; exit 1;; esac; \
+    mkdir -p /out; tmp="$(mktemp -d)"; cd "$tmp"; \
+    asset="oasdiff_${OASDIFF_VERSION}_linux_${arch}.tar.gz"; \
+    curl -fsSLO "https://github.com/oasdiff/oasdiff/releases/download/v${OASDIFF_VERSION}/${asset}"; \
+    curl -fsSLO "https://github.com/oasdiff/oasdiff/releases/download/v${OASDIFF_VERSION}/checksums.txt"; \
+    grep " ${asset}\$" checksums.txt | sha256sum -c -; \
+    tar -xzf "$asset" oasdiff; \
+    install -m 0755 oasdiff /out/oasdiff; \
+    asset="gitleaks_${GITLEAKS_VERSION}_linux_${glarch}.tar.gz"; \
+    curl -fsSLO "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/${asset}"; \
+    curl -fsSLO "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_checksums.txt"; \
+    grep " ${asset}\$" "gitleaks_${GITLEAKS_VERSION}_checksums.txt" | sha256sum -c -; \
+    tar -xzf "$asset" gitleaks; \
+    install -m 0755 gitleaks /out/gitleaks; \
+    cd /; rm -rf "$tmp"
+
+FROM node:${NODE_VERSION}-bookworm-slim
+
+ARG CLAUDE_CODE_VERSION=latest
+
+# Runtime: ca-certificates, git (Claude Code; gitleaks scans the MR commits),
+# ripgrep (Claude's Grep tool).
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends \
+      ca-certificates git ripgrep \
+ && rm -rf /var/lib/apt/lists/*
+
+# Claude Code CLI (installed system-wide, owned by root, read-only at runtime).
+RUN npm install -g "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}" \
+ && npm cache clean --force \
+ && claude --version
+
+# Backward-compatibility checkers (run by the bot with --network none, no
+# credentials; see internal/compat). A missing tool only disables its check.
+#   - oas2to3: built above from tools/oas2to3 (Swagger 2.0 specs).
+#   - oasdiff: verified release binary from the fetch stage.
+#   - buf and graphql-inspector: pinned npm packages (buf documents npm as a
+#     supported install method; graphql is graphql-inspector's peer dep).
+ARG BUF_VERSION=1.75.0
+ARG GRAPHQL_INSPECTOR_VERSION=7.0.2
+ARG GRAPHQL_VERSION=16.11.0
+COPY --from=oas2to3 /out/oas2to3 /usr/local/bin/oas2to3
+COPY --from=fetch /out/oasdiff /usr/local/bin/oasdiff
+RUN set -eu; \
+    npm install -g "@bufbuild/buf@${BUF_VERSION}" "@graphql-inspector/cli@${GRAPHQL_INSPECTOR_VERSION}" "graphql@${GRAPHQL_VERSION}"; \
+    npm cache clean --force; \
+    oasdiff --version; buf --version; graphql-inspector --version; \
+    rc=0; oas2to3 >/dev/null 2>&1 || rc=$?; test "$rc" -eq 2
+
+# Secret scanner (run by the bot with --network none, no credentials; see
+# internal/lint). The bot does not run linters: their results come from the
+# repositories' CI reports (lint.ci, docs/features/lint.md).
+COPY --from=fetch /out/gitleaks /usr/local/bin/gitleaks
+RUN gitleaks version
+
+# Mount points. HOME is a tmpfs at runtime; mode 1777 so any uid can write
+# when it is not (e.g. manual `docker run` without tmpfs).
+RUN mkdir -p /home/claude /work \
+ && chmod 1777 /home/claude /work
+# Read-only mounts: the merge base of the MR (/base), context repositories
+# (/repos/<group>/<project>) and skills (/skills).
+RUN mkdir -p /base /repos /skills
+
+# - Claude Code: no auto-update / telemetry inside the sandbox.
+# - USE_BUILTIN_RIPGREP=0: use the system ripgrep.
+# - No toolchain cache variables: nothing in the sandbox builds or installs.
+# - No GIT_CONFIG_* here: the bot sets the full safe-git config block (incl.
+#   safe.directory=/work, not "*") per run via the container environment, so
+#   the review's git cannot be redirected by the repo and the image default
+#   does not silently trust every directory.
+ENV HOME=/home/claude \
+    DISABLE_AUTOUPDATER=1 \
+    CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1 \
+    DISABLE_TELEMETRY=1 \
+    DISABLE_ERROR_REPORTING=1 \
+    USE_BUILTIN_RIPGREP=0
+
+WORKDIR /work
+# Any non-root uid works; this is only the default for manual runs.
+USER 1000:1000
+CMD ["claude", "--help"]

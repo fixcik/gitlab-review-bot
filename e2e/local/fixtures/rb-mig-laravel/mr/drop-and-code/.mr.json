@@ -1,0 +1,7 @@
+{
+  "branch": "mig/drop-created-by-add-code",
+  "title": "refactor: убрать created_by, добавить код заказа",
+  "scenarios": "V5",
+  "description": "`dropColumn('created_by')` и новая колонка `code` без `nullable()`/`default()`; в `down()` — `Schema::drop('orders')`.",
+  "expect": "В промпте удаление колонки (кандидаты в `app/Models/Order.php`, `OrderController.php`) и NOT NULL-колонка без DEFAULT; про `Schema::drop` из `down()` ничего; замечание про NOT NULL — не выше major; удаление используемой колонки — critical с `deployed_usage`."
+}

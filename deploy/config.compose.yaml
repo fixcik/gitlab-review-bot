@@ -1,0 +1,57 @@
+# Service config for `docker compose up -d` (commented template; `reviewbot init`
+# writes ./config.yaml with the same values). Mount it with
+# REVIEWBOT_CONFIG=./deploy/config.compose.yaml. Secrets come from .env.
+
+listen: ":8080"
+# MUST equal REVIEWBOT_DATA_DIR (default /var/lib/reviewbot): the directory
+# is bind-mounted at the same absolute path inside and outside the container,
+# because clone paths are passed to the host docker daemon as `-v <dir>:/work`.
+data_dir: "/var/lib/reviewbot"
+
+gitlab:
+  url: "https://gitlab.example.com"
+  # The groups the bot serves (replace; required by events "both").
+  groups: ["my-group"]
+  # Webhook + polling (recommended in production): GitLab does not redeliver
+  # a failed webhook, so with "webhook" alone the events of a restart or an
+  # outage are lost; polling catches them up after the start (cursors in the
+  # database, duplicates of webhook events are dropped).
+  events: "both"
+
+claude:
+  timeout: "15m"
+
+sandbox:
+  mode: "docker"
+  image: "ghcr.io/fixcik/gitlab-review-bot-sandbox:latest"   # = REVIEWBOT_SANDBOX_IMAGE in .env
+  network: "reviewbot-sandbox"
+  egress_proxy: "http://egress:3128"
+  egress_allow:
+    - api.anthropic.com
+    - statsig.anthropic.com
+    - claude.ai
+    - console.anthropic.com
+  cpus: "2"
+  memory: "4g"
+
+review:
+  skills:
+    dir: "/etc/reviewbot/skills"   # = REVIEWBOT_SKILLS (default ./deploy/skills)
+  # The bot's MCP tools (docs/features/mcp.md), on by default: the sandbox
+  # reaches http://egress:8091/mcp, egress forwards it to reviewbot:8091
+  # (docker-compose.yml, REVIEWBOT_MCP_TARGET). A run whose CLI does not
+  # connect is repeated once without MCP; "enabled: false" turns it off.
+  mcp:
+    enabled: true
+    listen: ":8091"                # never published (no "ports:" entry)
+
+limits:
+  max_concurrent: 2
+
+# On `docker compose stop` / a redeploy the bot stops starting jobs and lets
+# the running ones finish for up to shutdown_grace (then they are cancelled
+# and run again after the start). stop_grace_period of the reviewbot service
+# (docker-compose.yml) must be longer.
+queue:
+  shutdown_grace: "5m"
+  manual_max_age: "6h"

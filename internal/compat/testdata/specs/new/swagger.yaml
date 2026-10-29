@@ -1,0 +1,25 @@
+swagger: "2.0"
+info: {title: Orders, version: "1.0"}
+basePath: /api
+paths:
+  /orders:
+    post:
+      consumes: [application/json]
+      produces: [application/json]
+      parameters:
+        - in: body
+          name: body
+          required: true
+          schema:
+            type: object
+            properties:
+              currency: {type: string}
+              comment: {type: string}
+            required: [currency]
+      responses:
+        "200":
+          description: ok
+          schema:
+            type: object
+            properties:
+              total: {type: string}

@@ -1,0 +1,80 @@
+# Architecture rules, checked by go-arch-lint (https://github.com/fe3dback/go-arch-lint).
+# Run: scripts/arch-lint.sh (downloads the pinned release binary). CI runs it on every push.
+# Layers, bottom up: core/tracing (common) < config, util < domain < adapter-out, store, app
+# < ingress, web; review: leaves (rv-leaf) < shared env/publish/jobctx (rv-shared) < features
+# (f-*, a DAG) < orchestrator (internal/review); cmd wires everything. Each mayDependOn lists only
+# the edges the code really has (tightened against `go list` imports); widen a rule deliberately
+# when a new edge is wanted. docs/DESIGN.md ("Package layout") explains the layers and the DAG.
+# Entries marked TEMP are known violations scheduled for removal; the reason is next to them.
+version: 3
+workdir: .
+allow:
+  depOnAnyVendor: true
+excludeFiles:
+  - "^.*_test\\.go$"
+exclude:
+  - e2e
+  - deploy
+  - tools # separate Go module (oas2to3, built into the sandbox image)
+  - internal/review/reviewtest # test support (harness and fakes of the review tests), like _test.go files
+
+components:
+  cmd:            { in: cmd/** }
+  core:           { in: internal/core }
+  tracing:        { in: internal/tracing }
+  config:         { in: internal/config }
+  util:           { in: [internal/safefs, internal/tasklink, internal/webassets, internal/webui, internal/metrics, internal/dotenv] }
+  domain:         { in: [internal/compat, internal/lint, internal/migrations, internal/sysmap, internal/sysmap/model, internal/diffcov, internal/diffmap, internal/events, internal/learn, internal/memory, internal/problems, internal/reactions, internal/skills] }
+  adapter-out:    { in: [internal/gitlab, internal/jira, internal/claude, internal/repo, internal/contextrepos, internal/egress, internal/mcpserver] }
+  store:          { in: internal/store }
+  app:            { in: [internal/limits, internal/queue, internal/meter, internal/diag, internal/diag/diagindex, internal/telemetry, internal/doctor, internal/initwiz] }
+  ingress:        { in: [internal/poller, internal/webhook, internal/hooksync] }
+  web:            { in: [internal/usageweb, internal/diagweb, internal/mapweb, internal/problemsweb, internal/knowledgeweb, internal/homeweb, internal/setupweb] }
+  rv-leaf:        { in: [internal/review/mdtext, internal/review/marker, internal/review/summary, internal/review/finding, internal/review/jsonschema, internal/review/mrthread, internal/review/prompts, internal/review/diffcap, internal/review/cijob, internal/review/citelink, internal/review/output] }
+  rv-shared:      { in: [internal/review/env, internal/review/publish, internal/review/jobctx] }
+  f-task:         { in: internal/review/task }
+  f-learning:     { in: internal/review/learning }
+  f-linters:      { in: internal/review/linters }
+  f-compatcheck:  { in: internal/review/compatcheck }
+  f-migcheck:     { in: internal/review/migcheck }
+  f-verify:       { in: internal/review/verify }
+  f-pipeline:     { in: internal/review/pipeline }
+  f-crossrepo:    { in: internal/review/crossrepo }
+  f-labels:       { in: internal/review/labels }
+  f-descsum:      { in: internal/review/descsum }
+  f-mcp:          { in: internal/review/mcp }
+  orchestrator:   { in: internal/review }
+
+commonComponents: [core, tracing]
+
+deps:
+  cmd:          { anyProjectDeps: true }
+  # config and util have no entry: they import nothing of the project but core/tracing.
+  domain:       { mayDependOn: [config, util, domain] }
+  # deepScan off: diag passes its run observer through claude.WithObserver (decorator wiring).
+  adapter-out:  { deepScan: false, mayDependOn: [util, adapter-out] }
+  store:        { mayDependOn: [domain, app] }
+  # TEMP adapter-out: diag -> claude (diag's runner decorator reads claude.ProcessInfo through
+  # claude.WithObserver and records claude.AllowedTools/DisallowedTools); removing it means moving
+  # those into core or a leaf package.
+  app:          { mayDependOn: [util, domain, app, adapter-out] }
+  ingress:      { mayDependOn: [domain, adapter-out] }
+  web:          { mayDependOn: [util, domain, app, web] }
+  rv-leaf:      { mayDependOn: [rv-leaf] }
+  rv-shared:    { mayDependOn: [config, domain, app, rv-leaf, rv-shared] } # app: meter (token accounting)
+  f-task:       { mayDependOn: [config, util, domain, adapter-out, rv-leaf, rv-shared] } # adapter-out: jira
+  # deepScan off: review.New injects the orchestrator's NoteReactions implementation into
+  # learning.New on purpose (DIP callback); deepScan would report it as learning -> review.
+  f-learning:   { deepScan: false, mayDependOn: [config, domain, app, rv-leaf, rv-shared] }
+  f-linters:    { mayDependOn: [config, domain, rv-leaf, rv-shared, f-task] }
+  f-compatcheck: { mayDependOn: [config, domain, rv-leaf, rv-shared] }
+  f-migcheck:   { mayDependOn: [config, domain, rv-leaf, rv-shared] }
+  f-verify:     { mayDependOn: [config, domain, app, rv-leaf, rv-shared, f-learning, f-linters, f-compatcheck, f-migcheck] }
+  # deepScan off: review.New injects the orchestrator's Host implementation (pipelineHost) into
+  # pipeline.New on purpose (DIP callback), like learning's NoteReactions.
+  f-pipeline:   { deepScan: false, mayDependOn: [config, domain, adapter-out, app, rv-leaf, rv-shared, f-linters] } # adapter-out: gitlab CI/test-report types
+  f-crossrepo:  { mayDependOn: [config, util, domain, adapter-out, app, rv-leaf, rv-shared, f-task, f-compatcheck] } # adapter-out: jira
+  f-labels:     { mayDependOn: [config, domain, rv-leaf, rv-shared, f-linters, f-pipeline, f-compatcheck, f-migcheck] }
+  f-descsum:    { mayDependOn: [config, domain, rv-leaf, rv-shared] }
+  f-mcp:        { mayDependOn: [config, domain, adapter-out, app, rv-leaf, rv-shared, f-task, f-linters, f-compatcheck, f-migcheck, f-verify, f-pipeline, f-crossrepo] } # adapter-out: mcpserver
+  orchestrator: { mayDependOn: [config, domain, adapter-out, app, rv-leaf, rv-shared, f-task, f-learning, f-linters, f-compatcheck, f-migcheck, f-verify, f-pipeline, f-crossrepo, f-labels, f-descsum, f-mcp] } # adapter-out: mcpserver

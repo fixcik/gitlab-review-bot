@@ -1,0 +1,46 @@
+# Service config written by `reviewbot init` for `docker compose up -d`.
+# No secrets here: they are in .env (mode 600). Re-run `reviewbot init` to
+# change the answers (other keys are kept); `reviewbot doctor` checks it.
+# Reference of every key: docs/configuration.md
+
+listen: ":8080"
+# MUST equal REVIEWBOT_DATA_DIR in .env: the directory is bind-mounted at the
+# same absolute path inside and outside the container, because clone paths
+# are passed to the host docker daemon as `-v <dir>:/work`.
+data_dir: "/var/lib/reviewbot"
+
+gitlab:
+  url: "https://gitlab.example.com"
+  groups: ["my-group"]
+  # webhook, poll or both (webhook + polling catch-up after a restart).
+  events: "both"
+
+claude:
+  timeout: "15m"
+
+sandbox:
+  mode: "docker"
+  image: "ghcr.io/fixcik/gitlab-review-bot-sandbox:latest"   # = REVIEWBOT_SANDBOX_IMAGE in .env
+  network: "reviewbot-sandbox"
+  egress_proxy: "http://egress:3128"
+  egress_allow:
+    - api.anthropic.com
+    - statsig.anthropic.com
+    - claude.ai
+    - console.anthropic.com
+  cpus: "2"
+  memory: "4g"
+
+review:
+  skills:
+    dir: "/etc/reviewbot/skills"   # = REVIEWBOT_SKILLS (default ./deploy/skills)
+  mcp:
+    enabled: true
+    listen: ":8091"                # never published (no "ports:" entry)
+
+limits:
+  max_concurrent: 2
+
+queue:
+  shutdown_grace: "5m"
+  manual_max_age: "6h"

@@ -1,0 +1,7 @@
+{
+  "branch": "mig/remove-created-by-index",
+  "title": "refactor: убрать Order.created_by, индекс по статусу",
+  "scenarios": "V7",
+  "description": "`RemoveField`, `AddIndex` и `RunSQL` с `reverse_sql`.",
+  "expect": "В промпте `RemoveField` с кандидатами в `shop/models.py`/`shop/views.py` и `AddIndex`; совет `AddIndexConcurrently` + `atomic = False` в замечании Claude; `reverse_sql` не анализируется."
+}

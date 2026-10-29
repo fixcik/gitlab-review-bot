@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Настройка — Ревью-бот</title>
+<script nonce="{{.Nonce}}">
+try { var t0 = localStorage.getItem("reviewbot-usage-theme"); if (t0 === "light" || t0 === "dark") document.documentElement.setAttribute("data-theme", t0); } catch (e) {}
+</script>
+<style nonce="{{.Nonce}}">
+{{.CommonCSS}}
+</style>
+</head>
+<body>
+{{.Header}}
+
+<main id="main" class="setup">
+  <div class="head">
+    <div>
+      <h1>Проверка настройки</h1>
+      <p class="lead">Результат <code>reviewbot doctor</code> по конфигурации работающего бота. Только чтение: значения секретов не показываются, исправления — в <code>config.yaml</code> и <code>.env</code> (<code>reviewbot init</code>).</p>
+    </div>
+    <a class="btn" id="refresh" href="?refresh=1">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.25 8a5.25 5.25 0 1 1-1.54-3.71M13.25 2.75v3h-3"/></svg>
+      Обновить
+    </a>
+  </div>
+
+  <section class="card sum" aria-label="Итог">
+    <div class="n ok"><b>{{.OK}}</b> <span>пройдено</span></div>
+    <div class="n{{if .Fails}} fail{{end}}"><b>{{.Fails}}</b> <span>{{.FailWord}}</span></div>
+    <div class="n{{if .Warns}} warn{{end}}"><b>{{.Warns}}</b> <span>{{.WarnWord}}</span></div>
+    <div class="at muted">проверено в {{.At}}</div>
+  </section>
+
+  {{range .Groups}}<section class="card checks" aria-label="{{.Name}}">
+    <div class="card-h"><h2>{{.Name}}</h2></div>
+    <ul>
+      {{range .Rows}}<li class="chk {{.Class}}" id="c-{{.ID}}">
+        <span class="i" aria-hidden="true">{{.Mark}}</span>
+        <div class="b">
+          <div class="t">{{.Title}}</div>
+          {{if .Detail}}<div class="d">{{.Detail}}</div>{{end}}
+          {{if and .Action (ne .Class "ok")}}<div class="act"><span class="sr">Что сделать: </span>{{.Action}}</div>{{end}}
+        </div>
+      </li>
+      {{end}}
+    </ul>
+  </section>
+  {{end}}
+
+  <p class="note">Проверки: GitLab — только чтение (<code>GET</code>), Docker — <code>docker … inspect</code>, egress — <code>CONNECT api.anthropic.com:443</code> через прокси песочницы. Claude — только формат токена: живой вызов платный и делается на первом ревью. Результат хранится минуту, «Обновить» — не чаще раза в 15 секунд. Те же данные: <a href="/setup/data.json">/setup/data.json</a>.</p>
+</main>
+
+<script nonce="{{.Nonce}}">
+{{.CommonJS}}
+</script>
+<script nonce="{{.Nonce}}">
+D.initTheme();
+</script>
+</body>
+</html>

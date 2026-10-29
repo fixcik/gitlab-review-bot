@@ -1,0 +1,184 @@
+# CI: formatting, vet, tests (with -race on the concurrent packages), coverage,
+# the architecture rules (go-arch-lint), the docker-backed sandbox test and both
+# images. Images are only built. Every job that runs repository code has a read-only
+# token and no persisted credentials; the only write is the "publish-badge" job (main
+# only, no checkout): it force-pushes the coverage artifact's badge files to the orphan
+# branch "badges" (README shows it). Actions are pinned by commit SHA.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  CGO_ENABLED: "1" # github.com/mattn/go-sqlite3
+
+jobs:
+  test:
+    name: test (go ${{ matrix.go }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        # The minimum from go.mod and the current release (the images use the current one).
+        go: ["1.24.7", "stable"]
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version: ${{ matrix.go }}
+          cache-dependency-path: |
+            go.sum
+            tools/oas2to3/go.sum
+      - name: gofmt
+        run: |
+          unformatted=$(gofmt -l $(git ls-files '*.go' | grep -v '^e2e/local/fixtures/'))
+          if [ -n "$unformatted" ]; then echo "gofmt needed:"; echo "$unformatted"; exit 1; fi
+      - name: go mod tidy
+        run: |
+          go mod tidy
+          git diff --exit-code -- go.mod go.sum
+      - name: go vet
+        run: go vet ./...
+      - name: go test
+        run: go test -count=1 ./...
+      - name: go test -race (concurrent packages)
+        run: >-
+          go test -race -count=1
+          ./internal/queue/... ./internal/limits/... ./internal/poller/...
+          ./internal/repo/... ./internal/mcpserver/... ./internal/review/...
+          ./internal/tracing/... ./internal/diag/... ./internal/events/... ./internal/telemetry/...
+      - name: tools/oas2to3
+        working-directory: tools/oas2to3
+        run: go vet ./... && go test -count=1 ./...
+
+  coverage:
+    name: coverage
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # Runs the PR's code: read-only token (workflow default), no persisted credentials.
+    # The badge is published by "publish-badge" from the uploaded artifact.
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version-file: go.mod
+      - name: go test -coverpkg (fails below the floors in scripts/coverage-groups.txt)
+        run: scripts/coverage.sh .cache/coverage
+      - name: summary
+        if: always()
+        run: cat .cache/coverage/packages.md >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: coverage
+          path: |
+            .cache/coverage/cover.out
+            .cache/coverage/cover.html
+            .cache/coverage/packages.md
+            .cache/coverage/coverage.svg
+            .cache/coverage/coverage.txt
+
+  publish-badge:
+    name: publish coverage badge
+    # The only job with a write token: main only, no checkout, no repository code runs here;
+    # it force-pushes the files of the "coverage" artifact to the orphan branch "badges".
+    needs: coverage
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: coverage
+          path: ${{ runner.temp }}/coverage
+      - name: push to branch badges
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SRC: ${{ runner.temp }}/coverage
+        run: |
+          dir=$(mktemp -d)
+          cp "$SRC/coverage.svg" "$SRC/coverage.txt" "$SRC/packages.md" "$dir"/
+          cd "$dir"
+          pct=$(tr -cd '0-9.' < coverage.txt)
+          git init -q -b badges
+          git add .
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+            commit -qm "coverage ${pct}% for ${GITHUB_SHA::7}"
+          git push -qf "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" badges
+
+  arch:
+    name: architecture (go-arch-lint)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version-file: go.mod
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: .cache/go-arch-lint
+          key: go-arch-lint-${{ runner.os }}-${{ hashFiles('scripts/arch-lint.sh') }}
+      - run: scripts/arch-lint.sh
+
+  docker-sandbox:
+    name: sandbox runner against docker
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version-file: go.mod
+      - run: docker pull alpine:3.20
+      - run: go test -count=1 -run 'TestDockerIntegration' -v ./internal/claude/
+        env:
+          REVIEWBOT_DOCKER_TESTS: "1"
+
+  images:
+    name: build images
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: reviewbot
+            file: Dockerfile
+          - name: reviewbot-sandbox
+            file: Dockerfile.sandbox
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+      - uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
+        with:
+          context: .
+          file: ${{ matrix.file }}
+          push: false
+          build-args: VERSION=${{ github.sha }}
+          tags: ${{ matrix.name }}:ci
+          cache-from: type=gha,scope=${{ matrix.name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.name }}

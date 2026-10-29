@@ -1,0 +1,60 @@
+swagger: "2.0"
+info:
+  title: rb-backend legacy accounts API
+  version: 0.9.0
+basePath: /api/legacy
+consumes: [application/json]
+produces: [application/json]
+paths:
+  /accounts:
+    post:
+      operationId: createAccount
+      parameters:
+        - name: body
+          in: body
+          required: true
+          schema:
+            $ref: "#/definitions/AccountCreate"
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: "#/definitions/Account"
+  /accounts/{id}:
+    get:
+      operationId: getAccount
+      parameters:
+        - name: id
+          in: path
+          required: true
+          type: string
+      responses:
+        "200":
+          description: The account
+          schema:
+            $ref: "#/definitions/Account"
+        "404":
+          description: Not found
+definitions:
+  AccountCreate:
+    type: object
+    required: [email, name]
+    properties:
+      email:
+        type: string
+      name:
+        type: string
+      currency:
+        type: string
+  Account:
+    type: object
+    properties:
+      id:
+        type: string
+      email:
+        type: string
+      balance:
+        type: string
+        description: Decimal amount, e.g. "12.50"
+      currency:
+        type: string

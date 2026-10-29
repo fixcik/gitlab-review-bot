@@ -1,0 +1,186 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/fixcik/gitlab-review-bot/main/docs/reviewbot.schema.json
+# ↑ подсказки и проверка ключей в редакторе (VS Code + расширение YAML, JetBrains).
+# Положите как .reviewbot.yaml в корень репозитория: файл в целевой ветке MR
+# подключает репозиторий к ревью (review.require_repo_config; пустой файл —
+# настройки по умолчанию).
+# Файл читается из target-ветки MR, поэтому изменения в самом MR на ревью не влияют
+# (но бот проверит новую версию и напишет об ошибках в заметке MR).
+# Проверить локально: reviewbot validate-repo-config .reviewbot.yaml
+# Справочник всех ключей: docs/configuration.md
+
+enabled: true
+auto_review: true
+language: ru
+
+ignore:
+  - "**/*.pb.go"
+  - "**/mocks/**"
+  - "docs/**"
+
+instructions: |
+  Обращай внимание на обработку ошибок, утечки горутин и закрытие ресурсов.
+  Публичные функции пакета api должны проверять входные данные.
+
+# Инструкции для отдельных путей (glob doublestar). В промпт попадают только
+# те, что совпали с изменёнными файлами. До 50 записей, до 2000 символов.
+path_instructions:
+  - path: "migrations/**"
+    instructions: "Проверяй обратимость и блокировки таблиц"
+  - path: "api/**"
+    instructions: "Проверяй обратную совместимость контрактов и валидацию входных данных"
+
+# Ключей setup и tools больше нет: Claude не запускает команды, только читает
+# код (рабочее дерево MR, /base — код до MR, /repos — другие репозитории).
+# Файл с ними бот отклоняет (docs/configuration.md#удалённые-ключи).
+
+max_files: 50
+
+# Mermaid-схема изменений в саммари. false — не рисовать (по умолчанию true,
+# если схема включена в конфиге сервиса).
+diagram: true
+
+# Ключи проектов Jira для этого репозитория. Заменяют jira.project_keys
+# из конфига сервиса; пусто или не задано = берутся из конфига сервиса.
+jira:
+  project_keys: ["PROJ"]
+
+# Обучение на ответах команды. false — бот не учится на тредах этого
+# репозитория и не применяет в нём правила команды.
+learn:
+  enabled: true
+
+# Память проекта: бот запоминает (в своей базе, не в репозитории), как устроен
+# этот репозиторий: структура, где что лежит, подводные камни. Память — только
+# подсказка для модели, команд она не разрешает. false — память не читается и
+# не пишется.
+memory:
+  enabled: true
+
+# Покрытие нового кода: джоба CI и путь к отчёту в её артефактах.
+coverage:
+  job: "tests"
+  path: "build/coverage.xml"
+  min: 80                             # предупреждение ниже 80% (не блокирует)
+
+# Trunk-based: свои пороги (в обе стороны) и правило про флаги.
+tbd:
+  max_lines: 600
+  max_age: "48h"
+  feature_flags: true
+
+# Безопасность миграций БД: свои пути миграций и диалект (обычно не нужно —
+# Flyway, goose, golang-migrate, sqitch, Doctrine, Laravel, Alembic, Django
+# находятся сами).
+migrations:
+  enabled: true
+  paths: ["db/changes/**/*.sql"]
+  exclude: ["db/seeds/**"]
+  dialect: postgres                   # postgres | mysql
+
+# Скиллы команды из review.skills.dir сервиса (по умолчанию все). Скиллы из
+# .claude/skills этого репозитория бот не загружает.
+skills:
+  enabled: true
+  disable: []                         # например [go-style]
+
+# Контекст из других репозиториев групп (только чтение). По умолчанию включён,
+# если он включён в конфиге сервиса. exclude — glob по пути проекта.
+context:
+  enabled: true
+  exclude:
+    - "legacy/**"
+  # Связанные репозитории: первыми в промпте, сверх max_repos, можно вне групп.
+  related:
+    - repo: "frontend/web"
+      note: "фронтенд, вызывает наш REST API из src/api"
+
+# Обратная совместимость (trunk-based development). По умолчанию включена.
+# Изменённые в MR спецификации находятся сами: openapi*/swagger*.{yaml,yml,json}
+# и любые YAML/JSON с ключом верхнего уровня openapi:/swagger:, *.proto,
+# *.graphql/*.graphqls/schema.gql. Здесь можно добавить свои пути.
+compat:
+  enabled: true
+  openapi: ["contracts/*.yml"]      # дополнительные glob'ы (doublestar)
+  proto: []
+  graphql: []
+  # Ключа commands (свои проверки-команды) больше нет: бот не запускает код
+  # репозитория (docs/configuration.md#удалённые-ключи).
+
+# Секреты и линтеры (результаты только по изменённым строкам,
+# docs/features/lint.md). gitleaks запускает бот; выключить его нельзя, если
+# сервис не разрешил (review.lint.allow_disable_secrets). Линтеры запускает
+# CI: бот читает их отчёты из пайплайна MR. Пока job идёт, ревью
+# публикуется без них, треды появляются после завершения пайплайна.
+lint:
+  enabled: true
+  disable: []                         # [gitleaks] — только если сервис разрешил
+  ci:
+    - job: golangci-lint              # имя job (можно glob) в пайплайне MR
+      artifact: gl-code-quality.json  # путь в артефактах job
+    - job: "ruff*"
+      report: codequality             # отчёт Code Quality job (artifacts:reports:codequality)
+      tool: ruff                      # имя в MR: ci:ruff (по умолчанию — имя job)
+    - job: semgrep
+      artifact: semgrep.sarif
+      format: sarif                   # auto | codeclimate | sarif | checkstyle
+      severity: major                 # для всех результатов; пусто — из отчёта
+      blocking: true                  # блокирует по review.block_min_severity
+
+# «TODO без задачи»: TODO/FIXME в добавленных комментариях должны ссылаться на
+# задачу — TODO(PROJ-123): …, #12 или URL задачи. Можно выключить, сменить
+# маркеры и уровень, добавить исключения; blocking — только ужесточить.
+todo:
+  enabled: true
+  keywords: [TODO, FIXME, XXX, HACK]
+  severity: minor
+  ignore: ["legacy/**"]               # добавляется к review.todo.ignore
+
+# Автоматические метки MR (docs/features/labels.md). Правила дополняют правила
+# сервиса; правило с тем же name заменяет правило сервиса, enabled: false —
+# убирает его. Детерминированные условия (paths, when_fact) и instruction
+# (решает модель) объединяются через ИЛИ. Из нескольких сработавших меток
+# одного scope (type::…) ставится первая по порядку.
+labels:
+  enabled: true
+  remove_stale: true                  # снимать свои устаревшие метки (метки людей — никогда)
+  create_missing: false               # нет метки в проекте — пропустить и записать проблему
+  rules:
+    - name: backend
+      paths: ["api/**", "src/**"]
+    - name: db-migration
+      when_fact: migrations
+    - name: needs-tests
+      when_fact: no_tests_changed
+    - name: "type::bug"
+      instruction: "MR исправляет неправильное поведение (не новая функция и не рефакторинг)."
+    - name: "type::feature"
+      instruction: "MR добавляет новую функциональность."
+    - name: needs-design-review
+      instruction: "Меняет форму публичного API или контракты между сервисами."
+
+# Перепроверка critical/major замечаний перед публикацией
+# (docs/features/verify.md). Репозиторий может только выключить её.
+verify:
+  enabled: true
+
+# Разбор упавших пайплайнов (docs/features/ci.md): можно выключить и
+# дополнить список job, чьи падения не разбираются.
+ci:
+  enabled: true
+  ignore_jobs: ["deploy-*"]
+
+# Реакции бота (👀 ✅ ❤️ 🎉 …) можно только выключить для репозитория; тогда
+# «@bot спасибо» снова обрабатывается как вопрос.
+reactions:
+  enabled: true
+
+# Лимиты можно только ужесточить относительно конфига сервиса.
+limits:
+  user_reruns_per_hour: 3
+  mr_rerun_cooldown: "15m"
+
+# Порог размера MR для ревью: только строже сервисного review.max_mr_lines.
+# Больше — Claude не запускается (ревью всё равно: `@bot review force`).
+max_mr_lines: 1500
+big_mr:
+  block: true                         # слишком большой MR блокирует мерж

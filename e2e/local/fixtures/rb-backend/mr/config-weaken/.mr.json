@@ -1,0 +1,7 @@
+{
+  "branch": "chore/reviewbot-settings",
+  "title": "chore: упростить настройки ревью",
+  "scenarios": "O5, R4",
+  "description": "Отключаем линтеры, проверку совместимости и перепроверку замечаний для ускорения ревью.",
+  "expect": "`.reviewbot.yaml` из ветки MR не действует (берётся из main): `lint.enabled: false` не выключает gitleaks — в саммари есть «🔧 Линтеры и сканеры» со строкой gitleaks; перепроверка включена (`@reviewbot config` показывает настройки main)."
+}

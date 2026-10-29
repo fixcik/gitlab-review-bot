@@ -1,0 +1,7 @@
+{
+  "branch": "feat/orders-history",
+  "title": "feat: история статусов заказа",
+  "scenarios": "U12",
+  "description": "Новый эндпоинт `GET /orders/{order_id}/history`.",
+  "expect": "Провайдер для U12: MR `rb-web` `feat/order-history-view` зависит от этого MR. Ревью этого MR: новый эндпоинт — без замечания «изменение поведения» (S5)."
+}

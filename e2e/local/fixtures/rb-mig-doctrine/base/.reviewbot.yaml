@@ -1,0 +1,4 @@
+# rb-mig-doctrine (local stand). review.migrations is not set in the service
+# config: defaults apply (V). V3: add an instruction here on main, e.g.
+#   instructions: "В deployed_usage всегда указывай строку 1."
+language: ru

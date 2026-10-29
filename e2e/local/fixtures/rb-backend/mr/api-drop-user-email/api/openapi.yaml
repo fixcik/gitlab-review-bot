@@ -1,0 +1,124 @@
+openapi: 3.0.3
+info:
+  title: rb-backend users API
+  version: 1.4.0
+paths:
+  /api/v1/users:
+    get:
+      operationId: listUsers
+      summary: List users, newest first
+      parameters:
+        - name: limit
+          in: query
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 500
+            default: 50
+      responses:
+        "200":
+          description: Users
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/User"
+    post:
+      operationId: createUser
+      summary: Create a user (publishes user.created)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateUser"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "400":
+          description: Invalid body
+  /api/v1/users/{id}:
+    get:
+      operationId: getUser
+      summary: Get a user
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: The user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "404":
+          description: Not found
+  /api/v1/users/{id}/sessions:
+    get:
+      operationId: listUserSessions
+      summary: Active sessions of a user
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Sessions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Session"
+        "404":
+          description: Not found
+  /health:
+    get:
+      operationId: health
+      responses:
+        "200":
+          description: OK
+components:
+  schemas:
+    User:
+      type: object
+      required: [id, name, created_at]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+    Session:
+      type: object
+      required: [id, started_at]
+      properties:
+        id:
+          type: string
+        user_agent:
+          type: string
+        started_at:
+          type: string
+          format: date-time
+    CreateUser:
+      type: object
+      required: [email]
+      properties:
+        email:
+          type: string
+          format: email
+        name:
+          type: string

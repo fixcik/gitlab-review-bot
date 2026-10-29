@@ -1,0 +1,7 @@
+{
+  "branch": "mig/audit-table",
+  "title": "feat: таблица аудита заказов",
+  "scenarios": "V9",
+  "description": "Таблица `audit` создаётся в этом же MR (индекс и FK на неё), плюс два индекса на `orders`.",
+  "expect": "Подсказок про `audit` нет (таблица из этого MR); `CREATE INDEX CONCURRENTLY idx_orders_status` — подсказки нет; `CREATE INDEX idx_orders_customer` без CONCURRENTLY — есть."
+}

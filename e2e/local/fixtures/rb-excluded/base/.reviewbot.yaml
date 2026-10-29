@@ -1,0 +1,4 @@
+# reviewbot settings of rb-excluded (local stand). The project is in
+# gitlab.exclude, so the bot ignores it anyway (B12); the file is here so
+# that removing it from gitlab.exclude makes it a normal, opted-in project.
+language: ru

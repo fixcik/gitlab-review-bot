@@ -1,0 +1,13 @@
+{
+  "branch": "feat/geo-cities-dictionary",
+  "title": "feat: справочник городов для геопоиска",
+  "scenarios": "S7",
+  "description": "Справочник городов (2150 записей, сгенерирован скриптом, но лежит не в ignore) и dev-конфиг бакета.",
+  "generate": [
+    {"kind": "lines", "path": "internal/geo/cities.go", "count": 2150,
+     "head": "// Package geo holds the city dictionary for the geo search.\npackage geo\n\n// City is one entry of the dictionary.\ntype City struct {\n\tID   int\n\tName string\n}\n\n// Cities is the full dictionary.\nvar Cities = []City{",
+     "line": "\t{ID: {n}, Name: \"City {n}\"},",
+     "tail": "}"}
+  ],
+  "expect": "Больше `review.max_mr_lines` (2000): Claude не запускается — в `/usage` нет запуска, в `/runs` задача «skipped» с «mr too large», `reviewbot_skipped_total{reason=\"too_big\"}` +1. В саммари блок «📦 MR слишком большой для ревью: 2165 строк (порог 2000).» с советами, как разбить, и `review force` / меткой `big-mr-ok`; блок «🌿 Trunk-based» (+2165, ⚠️ больше 400). Быстрые проверки выполнены: блокирующий тред gitleaks на `deploy/geo.env` (ключ сгенерирован seed.sh), строка «⛔ Мерж заблокирован». `@reviewbot review force` → полное ревью (запуск в `/usage` как rerun); метка `big-mr-ok` + `@reviewbot review` → ревью."
+}

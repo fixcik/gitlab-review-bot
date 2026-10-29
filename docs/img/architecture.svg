@@ -1,0 +1,169 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2000" height="1150" viewBox="0 0 2000 1150" font-family="-apple-system, 'SF Pro Text', 'Segoe UI', Helvetica, Arial, sans-serif">
+<defs>
+<linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset="0.6" stop-color="#f6f2ff"/><stop offset="1" stop-color="#e7f4f6"/></linearGradient>
+<linearGradient id="card" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#efe9fc"/></linearGradient>
+<linearGradient id="pill" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#7b58cf"/><stop offset="1" stop-color="#4fa6c4"/></linearGradient>
+<linearGradient id="bar" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#7b58cf"/><stop offset="1" stop-color="#58b3c7"/></linearGradient>
+<linearGradient id="sb" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f3eeff"/><stop offset="1" stop-color="#d9ecf3"/></linearGradient>
+<linearGradient id="side" x1="0" y1="0" x2="0.4" y2="1"><stop offset="0" stop-color="#7b58cf"/><stop offset="1" stop-color="#4fa6c4"/></linearGradient>
+<marker id="ah" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#7b58cf"/></marker>
+</defs>
+<rect width="2000" height="1150" fill="url(#bg)"/>
+<text x="72" y="100" font-size="56" fill="#1f1b2e" font-weight="700" text-anchor="start" opacity="1">Архитектура ревью-бота</text>
+<rect x="72" y="124" width="150" height="5" rx="2" fill="#7b58cf"/>
+<text x="250" y="134" font-size="20" fill="#5b5870" font-weight="400" text-anchor="start" opacity="1">AI-ревью merge request'ов для self-managed GitLab: Go-сервис + Claude Code в песочнице</text>
+<rect x="72" y="175" width="300" height="96" rx="16" fill="url(#card)" stroke="#7b58cf" stroke-width="2.5"/>
+<text x="90" y="211" font-size="22" fill="#1f1b2e" font-weight="700" text-anchor="start" opacity="1">Разработчик</text>
+<text x="90" y="246" font-size="17" fill="#5b5870" font-weight="400" text-anchor="start" opacity="1">push в MR · @reviewbot в треде</text>
+<line x1="372" y1="223" x2="446" y2="223" stroke="#7b58cf" stroke-width="3.5" marker-end="url(#ah)"/>
+<circle cx="409" cy="223" r="17" fill="#fff" stroke="#7b58cf" stroke-width="3"/>
+<text x="409" y="229" font-size="17" fill="#5a3cb0" font-weight="700" text-anchor="middle" opacity="1">1</text>
+<rect x="446" y="175" width="340" height="96" rx="16" fill="url(#card)" stroke="#7b58cf" stroke-width="2.5"/>
+<text x="464" y="211" font-size="22" fill="#1f1b2e" font-weight="700" text-anchor="start" opacity="1">GitLab</text>
+<text x="464" y="246" font-size="17" fill="#5b5870" font-weight="400" text-anchor="start" opacity="1">вебхуки или опрос API</text>
+<line x1="786" y1="223" x2="860" y2="223" stroke="#7b58cf" stroke-width="3.5" marker-end="url(#ah)"/>
+<circle cx="823" cy="223" r="17" fill="#fff" stroke="#7b58cf" stroke-width="3"/>
+<text x="823" y="229" font-size="17" fill="#5a3cb0" font-weight="700" text-anchor="middle" opacity="1">2</text>
+<rect x="860" y="175" width="340" height="96" rx="16" fill="url(#card)" stroke="#7b58cf" stroke-width="2.5"/>
+<text x="878" y="211" font-size="22" fill="#1f1b2e" font-weight="700" text-anchor="start" opacity="1">Приём событий</text>
+<text x="878" y="246" font-size="17" fill="#5b5870" font-weight="400" text-anchor="start" opacity="1">события · опрос · подпись вебхука</text>
+<rect x="1260" y="175" width="240" height="96" rx="16" fill="url(#card)" stroke="#4fa6c4" stroke-width="2.5" stroke-dasharray="9 7"/>
+<text x="1278" y="211" font-size="22" fill="#1f1b2e" font-weight="700" text-anchor="start" opacity="1">Внешние сервисы</text>
+<text x="1278" y="246" font-size="17" fill="#5b5870" font-weight="400" text-anchor="start" opacity="1">Anthropic API · Jira</text>
+<rect x="72" y="330" width="1428" height="590" rx="22" fill="#ffffff" fill-opacity="0.55" stroke="#7b58cf" stroke-width="2.5" stroke-dasharray="12 9"/>
+<rect x="94" y="310" width="215" height="40" rx="20" fill="url(#pill)"/>
+<text x="112" y="337" font-size="20" fill="#ffffff" font-weight="700" text-anchor="start" opacity="1">reviewbot (Go)</text>
+<rect x="96" y="392" width="280" height="500" rx="22" fill="#ffffff" fill-opacity="0.55" stroke="#4fa6c4" stroke-width="2.5" stroke-dasharray="12 9"/>
+<rect x="118" y="372" width="127" height="40" rx="20" fill="url(#pill)"/>
+<text x="136" y="399" font-size="20" fill="#ffffff" font-weight="700" text-anchor="start" opacity="1">Задания</text>
+<rect x="114" y="432" width="244" height="150" rx="14" fill="url(#card)" stroke="#7b58cf" stroke-width="2.5"/>
+<text x="132" y="468" font-size="22" fill="#1f1b2e" font-weight="700" text-anchor="start" opacity="1">Очередь</text>
+<text x="132" y="503" font-size="17" fill="#5b5870" font-weight="400" text-anchor="start" opacity="1">SQLite, переживает</text>
+<text x="132" y="526" font-size="17" fill="#5b5870" font-weight="400" text-anchor="start" opacity="1">рестарт · дебаунс 90 с</text>
+<text x="132" y="549" font-size="17" fill="#5b5870" font-weight="400" text-anchor="start" opacity="1">один запуск на MR</text>
+<rect x="114" y="602" width="244" height="130" rx="14" fill="url(#card)" stroke="#7b58cf" stroke-width="2.5"/>
+<text x="132" y="638" font-size="22" fill="#1f1b2e" font-weight="700" text-anchor="start" opacity="1">Команды</text>
+<text x="132" y="673" font-size="17" fill="#5b5870" font-weight="400" text-anchor="start" opacity="1">@reviewbot review,</text>
+<text x="132" y="696" font-size="17" fill="#5b5870" font-weight="400" text-anchor="start" opacity="1">ask, help · реакции</text>
+<text x="132" y="719" font-size="17" fill="#5b5870" font-weight="400" text-anchor="start" opacity="1">👀 ✅ ❌ ⏳</text>
+<rect x="114" y="752" width="244" height="120" rx="14" fill="url(#card)" stroke="#7b58cf" stroke-width="2.5"/>
+<text x="132" y="788" font-size="22" fill="#1f1b2e" font-weight="700" text-anchor="start" opacity="1">Лимиты</text>
+<text x="132" y="823" font-size="17" fill="#5b5870" font-weight="400" text-anchor="start" opacity="1">запусков в час · на</text>
+<text x="132" y="846" font-size="17" fill="#5b5870" font-weight="400" text-anchor="start" opacity="1">пользователя · размер MR</text>
+<rect x="404" y="392" width="720" height="500" rx="22" fill="#ffffff" fill-opacity="0.55" stroke="#7b58cf" stroke-width="2.5" stroke-dasharray="12 9"/>
+<rect x="426" y="372" width="215" height="40" rx="20" fill="url(#pill)"/>
+<text x="444" y="399" font-size="20" fill="#ffffff" font-weight="700" text-anchor="start" opacity="1">Ревью-пайплайн</text>
+<rect x="422" y="432" width="218" height="150" rx="14" fill="url(#card)" stroke="#7b58cf" stroke-width="2.5"/>
+<text x="440" y="466" font-size="20" fill="#1f1b2e" font-weight="700" text-anchor="start" opacity="1">Подготовка</text>
+<text x="440" y="501" font-size="17" fill="#5b5870" font-weight="400" text-anchor="start" opacity="1">клон MR · код до MR</text>
+<text x="440" y="524" font-size="17" fill="#5b5870" font-weight="400" text-anchor="start" opacity="1">в /base · соседние</text>
+<text x="440" y="547" font-size="17" fill="#5b5870" font-weight="400" text-anchor="start" opacity="1">репозитории группы</text>
+<rect x="652" y="432" width="218" height="150" rx="14" fill="url(#card)" stroke="#7b58cf" stroke-width="2.5"/>
+<text x="670" y="466" font-size="20" fill="#1f1b2e" font-weight="700" text-anchor="start" opacity="1">Анализаторы</text>
+<text x="670" y="501" font-size="17" fill="#5b5870" font-weight="400" text-anchor="start" opacity="1">gitleaks · линтеры CI</text>
+<text x="670" y="524" font-size="17" fill="#5b5870" font-weight="400" text-anchor="start" opacity="1">oasdiff/buf · миграции</text>
+<text x="670" y="547" font-size="17" fill="#5b5870" font-weight="400" text-anchor="start" opacity="1">покрытие · размер MR</text>
+<rect x="882" y="432" width="224" height="150" rx="14" fill="url(#card)" stroke="#7b58cf" stroke-width="2.5"/>
+<text x="900" y="466" font-size="20" fill="#1f1b2e" font-weight="700" text-anchor="start" opacity="1">Контекст</text>
+<text x="900" y="501" font-size="17" fill="#5b5870" font-weight="400" text-anchor="start" opacity="1">Jira · правила команды</text>
+<text x="900" y="524" font-size="17" fill="#5b5870" font-weight="400" text-anchor="start" opacity="1">память проекта · скиллы</text>
+<text x="900" y="547" font-size="17" fill="#5b5870" font-weight="400" text-anchor="start" opacity="1">карта системы</text>
+<rect x="422" y="604" width="684" height="176" rx="16" fill="url(#sb)" stroke="#4fa6c4" stroke-width="2.5" stroke-dasharray="9 7"/>
+<text x="440" y="634" font-size="21" fill="#1f1b2e" font-weight="700" text-anchor="start" opacity="1">Песочница: свой Docker-контейнер на запуск</text>
+<rect x="440" y="650" width="152" height="84" rx="12" fill="#ffffff" stroke="#7b58cf" stroke-width="2"/>
+<text x="452" y="676" font-size="17" fill="#1f1b2e" font-weight="700" text-anchor="start" opacity="1">Claude Code</text>
+<text x="452" y="698" font-size="14" fill="#5b5870" font-weight="400" text-anchor="start" opacity="1">Sonnet · Read, Grep,</text>
+<text x="452" y="716" font-size="14" fill="#5b5870" font-weight="400" text-anchor="start" opacity="1">Glob, без Bash</text>
+<rect x="604" y="650" width="152" height="84" rx="12" fill="#ffffff" stroke="#7b58cf" stroke-width="2"/>
+<text x="616" y="676" font-size="17" fill="#1f1b2e" font-weight="700" text-anchor="start" opacity="1">Opus-советник</text>
+<text x="616" y="698" font-size="14" fill="#5b5870" font-weight="400" text-anchor="start" opacity="1">сложные случаи</text>
+<text x="616" y="716" font-size="14" fill="#5b5870" font-weight="400" text-anchor="start" opacity="1"></text>
+<rect x="768" y="650" width="152" height="84" rx="12" fill="#ffffff" stroke="#7b58cf" stroke-width="2"/>
+<text x="780" y="676" font-size="17" fill="#1f1b2e" font-weight="700" text-anchor="start" opacity="1">Haiku-поиск</text>
+<text x="780" y="698" font-size="14" fill="#5b5870" font-weight="400" text-anchor="start" opacity="1">широкий поиск</text>
+<text x="780" y="716" font-size="14" fill="#5b5870" font-weight="400" text-anchor="start" opacity="1">по репозиториям</text>
+<rect x="932" y="650" width="152" height="84" rx="12" fill="#ffffff" stroke="#7b58cf" stroke-width="2"/>
+<text x="944" y="676" font-size="17" fill="#1f1b2e" font-weight="700" text-anchor="start" opacity="1">MCP-сервер</text>
+<text x="944" y="698" font-size="14" fill="#5b5870" font-weight="400" text-anchor="start" opacity="1">данные по запросу,</text>
+<text x="944" y="716" font-size="14" fill="#5b5870" font-weight="400" text-anchor="start" opacity="1">submit_finding</text>
+<text x="440" y="762" font-size="15" fill="#5b5870" font-weight="400" text-anchor="start" opacity="1">без токенов GitLab · сеть только до api.anthropic.com · бот не запускает код репозитория</text>
+<rect x="422" y="806" width="330" height="72" rx="14" fill="url(#card)" stroke="#7b58cf" stroke-width="2.5"/>
+<text x="440" y="840" font-size="20" fill="#1f1b2e" font-weight="700" text-anchor="start" opacity="1">Перепроверка</text>
+<text x="440" y="873" font-size="15" fill="#5b5870" font-weight="400" text-anchor="start" opacity="1">critical и major пытаются опровергнуть</text>
+<rect x="776" y="806" width="330" height="72" rx="14" fill="url(#card)" stroke="#7b58cf" stroke-width="2.5"/>
+<text x="794" y="840" font-size="20" fill="#1f1b2e" font-weight="700" text-anchor="start" opacity="1">Дедуп и привязка к строкам</text>
+<text x="794" y="873" font-size="15" fill="#5b5870" font-weight="400" text-anchor="start" opacity="1">правила публикации, лимиты</text>
+<rect x="1148" y="392" width="332" height="500" rx="22" fill="#ffffff" fill-opacity="0.55" stroke="#4fa6c4" stroke-width="2.5" stroke-dasharray="12 9"/>
+<rect x="1170" y="372" width="277" height="40" rx="20" fill="url(#pill)"/>
+<text x="1188" y="399" font-size="20" fill="#ffffff" font-weight="700" text-anchor="start" opacity="1">Публикация в GitLab</text>
+<rect x="1166" y="432" width="296" height="112" rx="14" fill="url(#card)" stroke="#7b58cf" stroke-width="2.5"/>
+<text x="1184" y="466" font-size="20" fill="#1f1b2e" font-weight="700" text-anchor="start" opacity="1">Саммари-заметка</text>
+<text x="1184" y="501" font-size="17" fill="#5b5870" font-weight="400" text-anchor="start" opacity="1">обзор файлов, Mermaid,</text>
+<text x="1184" y="524" font-size="17" fill="#5b5870" font-weight="400" text-anchor="start" opacity="1">потребители API</text>
+<rect x="1166" y="560" width="296" height="100" rx="14" fill="url(#card)" stroke="#7b58cf" stroke-width="2.5"/>
+<text x="1184" y="594" font-size="20" fill="#1f1b2e" font-weight="700" text-anchor="start" opacity="1">Inline-замечания</text>
+<text x="1184" y="629" font-size="17" fill="#5b5870" font-weight="400" text-anchor="start" opacity="1">severity, suggestion, треды</text>
+<rect x="1166" y="676" width="296" height="100" rx="14" fill="url(#card)" stroke="#7b58cf" stroke-width="2.5"/>
+<text x="1184" y="710" font-size="20" fill="#1f1b2e" font-weight="700" text-anchor="start" opacity="1">Блокировка мержа</text>
+<text x="1184" y="745" font-size="17" fill="#5b5870" font-weight="400" text-anchor="start" opacity="1">критичные — через тред</text>
+<rect x="1166" y="792" width="296" height="84" rx="14" fill="url(#card)" stroke="#7b58cf" stroke-width="2.5"/>
+<text x="1184" y="825" font-size="19" fill="#1f1b2e" font-weight="700" text-anchor="start" opacity="1">Метки · описание MR</text>
+<text x="1184" y="860" font-size="17" fill="#5b5870" font-weight="400" text-anchor="start" opacity="1">реакции, саммари в описании</text>
+<path d="M1030 271 L1030 300 L390 300 L390 470 L362 470" fill="none" stroke="#7b58cf" stroke-width="3.5" marker-end="url(#ah)"/>
+<circle cx="700" cy="300" r="17" fill="#fff" stroke="#7b58cf" stroke-width="3"/>
+<text x="700" y="306" font-size="17" fill="#5a3cb0" font-weight="700" text-anchor="middle" opacity="1">3</text>
+<line x1="358" y1="545" x2="418" y2="545" stroke="#7b58cf" stroke-width="3.5" marker-end="url(#ah)"/>
+<circle cx="388" cy="545" r="17" fill="#fff" stroke="#7b58cf" stroke-width="3"/>
+<text x="388" y="551" font-size="17" fill="#5a3cb0" font-weight="700" text-anchor="middle" opacity="1">4</text>
+<line x1="531" y1="582" x2="531" y2="602" stroke="#7b58cf" stroke-width="3.5" marker-end="url(#ah)"/>
+<line x1="761" y1="582" x2="761" y2="602" stroke="#7b58cf" stroke-width="3.5" marker-end="url(#ah)"/>
+<line x1="994" y1="582" x2="994" y2="602" stroke="#7b58cf" stroke-width="3.5" marker-end="url(#ah)"/>
+<line x1="587" y1="780" x2="587" y2="804" stroke="#7b58cf" stroke-width="3.5" marker-end="url(#ah)"/>
+<circle cx="587" cy="792" r="17" fill="#fff" stroke="#7b58cf" stroke-width="3"/>
+<text x="587" y="798" font-size="17" fill="#5a3cb0" font-weight="700" text-anchor="middle" opacity="1">5</text>
+<line x1="752" y1="842" x2="774" y2="842" stroke="#7b58cf" stroke-width="3.5" marker-end="url(#ah)"/>
+<line x1="1106" y1="842" x2="1164" y2="842" stroke="#7b58cf" stroke-width="3.5" marker-end="url(#ah)"/>
+<circle cx="1135" cy="842" r="17" fill="#fff" stroke="#7b58cf" stroke-width="3"/>
+<text x="1135" y="848" font-size="17" fill="#5a3cb0" font-weight="700" text-anchor="middle" opacity="1">6</text>
+<rect x="72" y="950" width="1428" height="72" rx="16" fill="url(#bar)"/>
+<text x="100" y="982" font-size="24" fill="#ffffff" font-weight="700" text-anchor="start" opacity="1">Хранилище (SQLite)</text>
+<text x="100" y="1008" font-size="18" fill="#ffffff" font-weight="400" text-anchor="start" opacity="0.95">правила и память проектов · карта системы · расход токенов · диагностика запусков · проблемы проверки</text>
+<rect x="72" y="1046" width="1428" height="72" rx="16" fill="url(#bar)"/>
+<text x="100" y="1078" font-size="24" fill="#ffffff" font-weight="700" text-anchor="start" opacity="1">Наблюдаемость</text>
+<text x="100" y="1104" font-size="18" fill="#ffffff" font-weight="400" text-anchor="start" opacity="0.95">/ · /usage · /runs · /map · /problems · /knowledge · /metrics (Prometheus) · трейсы OpenTelemetry</text>
+<rect x="1540" y="175" width="388" height="943" rx="26" fill="url(#side)"/>
+<text x="1570" y="228" font-size="32" fill="#ffffff" font-weight="700" text-anchor="start" opacity="1">Сценарии</text>
+<circle cx="1584" cy="279" r="19" fill="#ffffff" fill-opacity="0.95"/>
+<text x="1584" y="285" font-size="19" fill="#5a3cb0" font-weight="700" text-anchor="middle" opacity="1">1</text>
+<text x="1618" y="285" font-size="22" fill="#ffffff" font-weight="700" text-anchor="start" opacity="1">Событие</text>
+<text x="1618" y="313" font-size="17" fill="#ffffff" font-weight="400" text-anchor="start" opacity="0.92">Разработчик пушит в MR или</text>
+<text x="1618" y="336" font-size="17" fill="#ffffff" font-weight="400" text-anchor="start" opacity="0.92">пишет @reviewbot в треде</text>
+<circle cx="1584" cy="405" r="19" fill="#ffffff" fill-opacity="0.95"/>
+<text x="1584" y="411" font-size="19" fill="#5a3cb0" font-weight="700" text-anchor="middle" opacity="1">2</text>
+<text x="1618" y="411" font-size="22" fill="#ffffff" font-weight="700" text-anchor="start" opacity="1">Приём</text>
+<text x="1618" y="439" font-size="17" fill="#ffffff" font-weight="400" text-anchor="start" opacity="0.92">GitLab присылает вебхук</text>
+<text x="1618" y="462" font-size="17" fill="#ffffff" font-weight="400" text-anchor="start" opacity="0.92">или бот сам опрашивает API</text>
+<circle cx="1584" cy="531" r="19" fill="#ffffff" fill-opacity="0.95"/>
+<text x="1584" y="537" font-size="19" fill="#5a3cb0" font-weight="700" text-anchor="middle" opacity="1">3</text>
+<text x="1618" y="537" font-size="22" fill="#ffffff" font-weight="700" text-anchor="start" opacity="1">Очередь</text>
+<text x="1618" y="565" font-size="17" fill="#ffffff" font-weight="400" text-anchor="start" opacity="0.92">Задание ждёт дебаунс, проходит</text>
+<text x="1618" y="588" font-size="17" fill="#ffffff" font-weight="400" text-anchor="start" opacity="0.92">лимиты, ставится в очередь</text>
+<circle cx="1584" cy="657" r="19" fill="#ffffff" fill-opacity="0.95"/>
+<text x="1584" y="663" font-size="19" fill="#5a3cb0" font-weight="700" text-anchor="middle" opacity="1">4</text>
+<text x="1618" y="663" font-size="22" fill="#ffffff" font-weight="700" text-anchor="start" opacity="1">Запуск Claude</text>
+<text x="1618" y="691" font-size="17" fill="#ffffff" font-weight="400" text-anchor="start" opacity="0.92">Подготовка и анализаторы</text>
+<text x="1618" y="714" font-size="17" fill="#ffffff" font-weight="400" text-anchor="start" opacity="0.92">готовят данные, Claude читает</text>
+<text x="1618" y="737" font-size="17" fill="#ffffff" font-weight="400" text-anchor="start" opacity="0.92">код в песочнице</text>
+<circle cx="1584" cy="806" r="19" fill="#ffffff" fill-opacity="0.95"/>
+<text x="1584" y="812" font-size="19" fill="#5a3cb0" font-weight="700" text-anchor="middle" opacity="1">5</text>
+<text x="1618" y="812" font-size="22" fill="#ffffff" font-weight="700" text-anchor="start" opacity="1">Проверка</text>
+<text x="1618" y="840" font-size="17" fill="#ffffff" font-weight="400" text-anchor="start" opacity="0.92">Серьёзные замечания проходят</text>
+<text x="1618" y="863" font-size="17" fill="#ffffff" font-weight="400" text-anchor="start" opacity="0.92">перепроверку по коду</text>
+<circle cx="1584" cy="932" r="19" fill="#ffffff" fill-opacity="0.95"/>
+<text x="1584" y="938" font-size="19" fill="#5a3cb0" font-weight="700" text-anchor="middle" opacity="1">6</text>
+<text x="1618" y="938" font-size="22" fill="#ffffff" font-weight="700" text-anchor="start" opacity="1">Публикация</text>
+<text x="1618" y="966" font-size="17" fill="#ffffff" font-weight="400" text-anchor="start" opacity="0.92">Саммари, inline-треды, метки,</text>
+<text x="1618" y="989" font-size="17" fill="#ffffff" font-weight="400" text-anchor="start" opacity="0.92">блок в описании MR; исправленные</text>
+<text x="1618" y="1012" font-size="17" fill="#ffffff" font-weight="400" text-anchor="start" opacity="0.92">треды закрываются сами</text>
+<text x="1570" y="1086" font-size="16" fill="#ffffff" font-weight="400" text-anchor="start" opacity="0.85">Цифры в кружках — шаги сценария</text>
+</svg>

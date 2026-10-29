@@ -1,0 +1,7 @@
+{
+  "branch": "mig/add-delivery-note",
+  "title": "feat: комментарий к доставке",
+  "scenarios": "V13",
+  "description": "Безопасная миграция `ADD COLUMN delivery_note text`.",
+  "expect": "Правила миграций в промпте и раздел «the scanner found none … still read the migration files»; замечаний critical нет."
+}

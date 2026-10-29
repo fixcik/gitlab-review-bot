@@ -1,0 +1,31 @@
+# Пример scrape config Prometheus для GitLab Review Bot.
+# Вставьте job в scrape_configs своего prometheus.yml (или подключите файл
+# целиком через scrape_config_files, Prometheus >= 2.43).
+#
+# /metrics отдаётся на том же порту, что /webhook (listen, по умолчанию :8080).
+# Если у бота задан METRICS_TOKEN (или metrics.token), нужен заголовок
+# Authorization: Bearer <токен>; токен в URL и cookie бот не принимает.
+# Без токена удалите блок authorization. metrics.enabled: false — /metrics
+# отвечает 404, скрейп будет падать (up == 0).
+#
+# Имя job "reviewbot" ожидают правила deploy/prometheus/reviewbot-alerts.yml
+# (ReviewbotDown, ReviewbotAbsent) и переменная job дашборда.
+
+scrape_configs:
+  - job_name: reviewbot
+    scrape_interval: 30s
+    # Сбор метрик ограничен 4 с на стороне бота (проверки /readyz для
+    # reviewbot_readiness_check_ok); 10 с хватает с запасом.
+    scrape_timeout: 10s
+    metrics_path: /metrics
+    scheme: http
+    authorization:
+      type: Bearer
+      # Файл с METRICS_TOKEN бота (одна строка). Альтернатива — credentials: "<токен>".
+      credentials_file: /etc/prometheus/secrets/reviewbot-metrics-token
+    static_configs:
+      - targets: ["reviewbot:8080"]
+        # Свои метки таргета (env, team …) попадут во все ряды; дашборд и
+        # алерты их не требуют.
+        labels:
+          env: prod

@@ -1,0 +1,7 @@
+{
+  "branch": "contracts/proto-graphql-breaking",
+  "title": "refactor: почистить контракты событий и GraphQL",
+  "scenarios": "J2, J3",
+  "description": "`proto/users.proto`: поле `email` перенумеровано (2 → 5), `created_at_unix` удалено. `schema.graphql`: у `User` убрано поле `email`.",
+  "expect": "buf breaking: смена номера и удаление поля — блокирующие треды; graphql-inspector: удалено поле `User.email` — блокирующий тред."
+}

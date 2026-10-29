@@ -1,0 +1,7 @@
+{
+  "branch": "mig/rename-status",
+  "title": "refactor: переименовать orders.status в state",
+  "scenarios": "V10, V11",
+  "description": "Переименование колонки; код в этом MR не меняется.",
+  "expect": "Подсказка о переименовании колонки (`status` — общее имя: пометка «generic name», кандидаты только из файлов, где есть `orders`/`Order`); переименование используемой колонки ломает задеплоенный код — critical только с подтверждённым `deployed_usage`, иначе понижение."
+}

@@ -1,0 +1,7 @@
+{
+  "branch": "events/rename-user-name",
+  "title": "refactor: full_name в событии user.created, своя переменная топика",
+  "scenarios": "J4",
+  "description": "В JSON события `user.created` поле `name` переименовано в `full_name`. Переменная окружения топика: `EVENTS_TOPIC` → `USERS_EVENTS_TOPIC`.",
+  "expect": "Claude находит несовместимость без спецификаций: `rb-consumer` читает `name` и `EVENTS_TOPIC` (ссылки на `rb-consumer`), перепроверка подтверждает — блокирующий тред совместимости."
+}

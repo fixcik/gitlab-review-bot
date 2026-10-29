@@ -1,0 +1,807 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<meta name="color-scheme" content="light dark">
+<title>Диагностика запусков · ревью-бот</title>
+<script nonce="{{NONCE}}">
+try { var t0 = localStorage.getItem("reviewbot-usage-theme"); if (t0 === "light" || t0 === "dark") document.documentElement.setAttribute("data-theme", t0); } catch (e) {}
+(function () { var l = document.createElement("link"); l.rel = "icon"; l.href = "data:image/svg+xml," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><rect width="16" height="16" rx="4" fill="#7b58cf"/><path d="M8 3.5 12 6v4l-4 2.5L4 10V6z" fill="none" stroke="#fff" stroke-width="1.6"/></svg>'); document.head.appendChild(l); })();
+</script>
+<style nonce="{{NONCE}}">
+{{COMMON_CSS}}
+{{DIAG_CSS}}
+</style>
+</head>
+<body>
+{{HEADER}}
+
+<main id="main" class="vb" aria-busy="true">
+  <div class="vb-top">
+    <h1>Диагностика запусков</h1>
+    <div class="stats" id="stats" aria-live="polite"><span>Загрузка…</span></div>
+    <div class="controls">
+      <div class="seg" id="windows" role="group" aria-label="Окно">
+        <button type="button" data-w="6h">6ч</button><button type="button" data-w="24h">24ч</button><button type="button" data-w="48h">48ч</button>
+      </div>
+      <label class="toggle"><input type="checkbox" id="auto"> автообновление</label>
+      <button type="button" class="btn icon" id="reload" aria-label="Обновить данные" title="Обновить">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9"/><path d="M12.5 1.75v2.75H9.75"/></svg>
+      </button>
+      <button type="button" class="btn icon" id="kbd-btn" aria-label="Горячие клавиши" title="Горячие клавиши (?)" aria-expanded="false" aria-controls="kbdhelp">?</button>
+    </div>
+  </div>
+  <p class="range" id="range">Загрузка…</p>
+
+  <div class="banner" id="error" role="alert" hidden>
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 1a7 7 0 1 1 0 14A7 7 0 0 1 8 1Zm0 9.5a1 1 0 1 0 0 2 1 1 0 0 0 0-2ZM8 4a.9.9 0 0 0-.9.95l.2 4.1a.7.7 0 0 0 1.4 0l.2-4.1A.9.9 0 0 0 8 4Z"/></svg>
+    <div><h2 id="error-title">Не удалось загрузить данные</h2><p id="error-text"></p></div>
+  </div>
+
+  <div class="live" id="live" aria-label="Сейчас" hidden></div>
+
+  <div class="vb-grid" id="grid">
+    <aside class="facets" id="facets" aria-label="Фасеты"></aside>
+    <div class="listcol">
+      <div class="views" id="views" role="tablist" aria-label="Сохранённые наборы фильтров"></div>
+      <div class="vb-panel">
+        <div class="vb-bar">
+          <div class="filters" id="filters" data-review-filters aria-label="Фильтры">
+            <label>Поиск <input type="search" id="f-q" name="q" data-label="Поиск" placeholder="ошибка, заголовок, ID" size="18"></label>
+            <label>MR <input type="search" id="f-mr" name="mr" data-label="MR" data-prefix="!" placeholder="123" size="6" inputmode="numeric"></label>
+            <label>Статус
+              <select id="f-status" name="status" data-label="Статус" multiple>
+                <option value="failed" data-swatch="c-fail">ошибка</option><option value="interrupted" data-swatch="c-fail">прервано</option>
+                <option value="postponed" data-swatch="c-post">отложено</option><option value="skipped" data-swatch="c-skip">пропущено</option>
+                <option value="ok" data-swatch="c-ok">успешно</option><option value="running" data-swatch="c-run">выполняется</option>
+              </select>
+            </label>
+            <label>Тип
+              <select id="f-kind" name="kind" data-label="Тип" multiple>{{KIND_OPTIONS}}</select>
+            </label>
+            <label>Проект <select id="f-project" name="project" data-label="Проект" multiple></select></label>
+            <label>Автор <select id="f-user" name="user" data-label="Автор" multiple></select></label>
+            <label><input type="checkbox" id="f-claude" name="claude" data-label="с Claude"> с Claude</label>
+            <label>Время <select id="f-time" name="time" data-label="Время"><option value="">всё окно</option></select></label>
+          </div>
+          <div class="vb-bar2"><span class="lbl">Группа</span>
+            <div class="seg" id="group" role="group" aria-label="Группировка">
+              <button type="button" data-g="">нет</button><button type="button" data-g="mr">MR</button><button type="button" data-g="kind">тип</button><button type="button" data-g="project">проект</button><button type="button" data-g="err">причина</button>
+            </div>
+          </div>
+        </div>
+        <div class="vb-trunc" id="trunc" hidden></div>
+        <div class="tlstrip" id="tlstrip"><div class="cap"><span id="tlcap"></span><span>протяните, чтобы выбрать время · двойной клик — сброс</span></div><div id="tl" role="img" aria-label="Задачи во времени по статусам"></div></div>
+        <div class="bulk" id="bulk" hidden></div>
+        <div class="scroll"><table class="dense" id="t-runs" aria-label="Задачи"></table></div>
+      </div>
+      <p class="foot"><span>Каждая задача очереди (ревью, вопрос, обучение, команда) с шагами и полными сессиями Claude. Записи хранятся <b id="ret">48 часов</b>, секреты вычищаются при записи; код и промпты сохраняются как есть.</span><span><kbd>?</kbd> — горячие клавиши</span></p>
+    </div>
+    <aside class="rdw" id="drawer" aria-label="Запуск" hidden>
+      <div class="rdw-grip" id="grip" role="separator" aria-orientation="vertical" aria-label="Ширина панели: перетащите или ←/→" tabindex="0"></div>
+      <header class="rdw-h">
+        <button type="button" class="btn sm rdw-back" id="d-back" aria-label="Назад к списку">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M10 3 5 8l5 5"/></svg>К списку</button>
+        <div class="rdw-t" id="d-title"></div>
+        <div class="rdw-nav">
+          <button type="button" class="btn sm icon ghost" id="d-prev" aria-label="Предыдущий запуск (k)" title="Предыдущий (k)"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="m4 10 4-4 4 4"/></svg></button>
+          <button type="button" class="btn sm icon ghost" id="d-next" aria-label="Следующий запуск (j)" title="Следующий (j)"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="m4 6 4 4 4-4"/></svg></button>
+        </div>
+        <a class="btn sm" id="d-page" href="/runs" title="Открыть страницей (Shift+Enter)"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M9 3h4v4M13 3 7.5 8.5M11 9.5V13H3V5h3.5"/></svg><span class="pagelbl">страницей</span></a>
+        <button type="button" class="btn sm rdw-full" id="d-full" aria-pressed="false" title="Развернуть на всю ширину (f)">развернуть</button>
+        <button type="button" class="btn sm icon ghost" id="d-close" aria-label="Закрыть панель (Esc)" title="Закрыть (Esc)"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="m4 4 8 8M12 4l-8 8"/></svg></button>
+      </header>
+      <div class="rdw-body" id="d-body"></div>
+    </aside>
+  </div>
+</main>
+
+<div class="kbdhelp" id="kbdhelp" role="dialog" aria-label="Горячие клавиши" hidden>
+  <h3>Горячие клавиши <button type="button" class="btn sm icon ghost" id="kbd-close" aria-label="Закрыть">×</button></h3>
+  <dl>
+    <dt><kbd>j</kbd><kbd>k</kbd> <kbd>↓</kbd><kbd>↑</kbd></dt><dd>по строкам (панель следует за выбором)</dd>
+    <dt><kbd>Enter</kbd></dt><dd>открыть запуск в панели / раскрыть группу</dd>
+    <dt><kbd>Shift</kbd><kbd>Enter</kbd></dt><dd>открыть страницей</dd>
+    <dt><kbd>Space</kbd> <kbd>o</kbd></dt><dd>раскрыть строку на месте</dd>
+    <dt><kbd>x</kbd></dt><dd>выбрать строку (для «Скопировать ID»)</dd>
+    <dt><kbd>/</kbd></dt><dd>поиск</dd>
+    <dt><kbd>1</kbd>–<kbd>9</kbd></dt><dd>наборы фильтров</dd>
+    <dt><kbd>f</kbd></dt><dd>панель на всю ширину</dd>
+    <dt><kbd>Esc</kbd></dt><dd>закрыть панель</dd>
+    <dt><kbd>?</kbd></dt><dd>эта подсказка</dd>
+  </dl>
+</div>
+
+<script nonce="{{NONCE}}" src="{{FILTERS}}"></script>
+<script nonce="{{NONCE}}">
+{{COMMON_JS}}
+</script>
+<script nonce="{{NONCE}}" src="{{RUNDETAIL}}"></script>
+<script nonce="{{NONCE}}">
+(function () {
+  "use strict";
+  var $ = D.$, h = D.h, clear = D.clear;
+  D.initTheme();
+
+  var SVGNS = "http://www.w3.org/2000/svg";
+  var AUTO_KEY = "reviewbot-runs-auto", VIEWS_KEY = "reviewbot-runs-views", DW_KEY = "reviewbot-runs-drawer-w";
+  var MULTI = ["status", "kind", "project", "user"];
+  var PAGE = 200;
+  function lsGet(k, d) { try { var v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch (e) { return d; } }
+  function lsSet(k, v) { try { if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* storage blocked */ } }
+  function list(s) { return (s || "").split(",").map(function (x) { return x.trim(); }).filter(Boolean); }
+
+  // ---- state: the URL keeps since, status, kind, project, mr (as before) and
+  // the new user, q, claude, group; status/kind/project/user take lists (a,b).
+  var q = new URLSearchParams(location.search);
+  var st = { since: q.get("since") || "", status: list(q.get("status")), kind: list(q.get("kind")), project: list(q.get("project")), user: list(q.get("user")),
+    mr: (q.get("mr") || "").replace(/^!/, ""), q: q.get("q") || "", claude: q.get("claude") === "1" ? "1" : "", group: q.get("group") || "", from: 0, to: 0, sort: "t", dir: -1 };
+  var data = null, rows = [], byId = {}, seq = 0, timer = null, projectsResolved = false;
+  var cur = -1, flat = [], open = {}, gopen = {}, sel = {}, limit = PAGE, facetMore = {};
+
+  function params() {
+    var p = new URLSearchParams();
+    if (st.since) p.set("since", st.since);
+    MULTI.forEach(function (k) { if (st[k].length) p.set(k, st[k].join(",")); });
+    if (st.mr) p.set("mr", st.mr);
+    if (st.q) p.set("q", st.q);
+    if (st.claude) p.set("claude", "1");
+    if (st.group) p.set("group", st.group);
+    return p;
+  }
+  function push() { var s = params().toString(); history.replaceState(null, "", location.pathname + (s ? "?" + s : "") + location.hash); }
+
+  // ---- filter bar (D.filters over the native controls) -------------------------
+  function writeNative() {
+    $("f-q").value = st.q; $("f-mr").value = st.mr; $("f-claude").checked = !!st.claude;
+    ["status", "kind"].forEach(function (k) { D.each($("f-" + k).options, function (o) { o.selected = st[k].indexOf(o.value) >= 0; }); });
+  }
+  writeNative();
+  function applyFilters(v) {
+    if (!v) v = bar ? bar.get() : { q: $("f-q").value, mr: $("f-mr").value, claude: $("f-claude").checked ? "1" : "", status: [], kind: [], project: [], user: [], time: "" };
+    st.q = (v.q || "").trim(); st.mr = (v.mr || "").trim().replace(/^!/, ""); st.claude = v.claude === "1" ? "1" : "";
+    MULTI.forEach(function (k) { if (Array.isArray(v[k])) st[k] = v[k].slice(); });
+    if (!v.time) st.from = st.to = 0;
+    changed();
+  }
+  var bar = D.filters.enhance($("filters"), { onChange: applyFilters });
+  if (!bar) $("filters").addEventListener("change", function () { applyFilters(null); });
+  var quietLoad = false, loadedOnce = false;
+  function syncBar() {
+    if (!bar) return;
+    // Auto-refresh does not redraw the bar while it is in use (open list, focus, typing).
+    if (quietLoad && (bar.root.contains(document.activeElement) || bar.root.querySelector(".rf-field.is-open"))) return;
+    var all = window0(), cnt = function (skip, fn) { var m = {}; all.forEach(function (r) { if (match(r, skip)) { var k = fn(r); m[k] = (m[k] || 0) + 1; } }); return m; };
+    var cs = cnt("status", function (r) { return r.status; }), ck = cnt("kind", function (r) { return r.kind; }), cp = cnt("project", function (r) { return r.project_path; }), cu = cnt("user", uname);
+    var kinds = []; D.each($("f-kind").options, function (o) { kinds.push({ value: o.value, label: o.textContent, count: ck[o.value] || 0 }); });
+    kinds.sort(function (a, b) { return b.count - a.count; });
+    var statuses = []; D.each($("f-status").options, function (o) { statuses.push({ value: o.value, label: o.textContent, swatch: o.dataset.swatch, count: cs[o.value] || 0 }); });
+    var keys = function (m, extra) { var o = Object.keys(m); (extra || []).forEach(function (x) { if (o.indexOf(x) < 0) o.push(x); }); return o.sort(function (a, b) { return (m[b] || 0) - (m[a] || 0); }); };
+    bar.refresh({
+      status: statuses, kind: kinds,
+      project: keys(cp, st.project).map(function (k) { return { value: k, label: D.repoName(k) || "—", count: cp[k] || 0, group: k.indexOf("/") > 0 ? k.slice(0, k.lastIndexOf("/")) : "" }; }),
+      user: keys(cu, st.user).map(function (k) { return { value: k, label: k === "—" ? "без автора (CI)" : "@" + k, count: cu[k] || 0 }; }),
+      time: st.from ? [{ value: "range", label: hm(st.from) + "–" + hm(st.to) }] : []
+    });
+    bar.set({ q: st.q, mr: st.mr, status: st.status, kind: st.kind, project: st.project, user: st.user, claude: st.claude, time: st.from ? "range" : "" });
+    var tf = bar.root.querySelector('[data-key="time"]'); if (tf) tf.hidden = !st.from;
+  }
+
+  // ---- window, auto refresh ------------------------------------------------------
+  function syncWindows(def) { var w = st.since || def; D.each($("windows").children, function (b) { b.setAttribute("aria-pressed", String(b.dataset.w === w)); }); }
+  $("windows").addEventListener("click", function (e) { var b = e.target.closest("button"); if (!b) return; st.since = b.dataset.w; st.from = st.to = 0; push(); load(); });
+  $("reload").addEventListener("click", function () { load(); });
+  var auto = false;
+  try { auto = localStorage.getItem(AUTO_KEY) === "1"; } catch (e) { /* storage blocked */ }
+  $("auto").checked = auto;
+  $("auto").addEventListener("change", function () {
+    auto = $("auto").checked;
+    try { if (auto) localStorage.setItem(AUTO_KEY, "1"); else localStorage.removeItem(AUTO_KEY); } catch (e) { /* storage blocked */ }
+    schedule();
+  });
+  function schedule() {
+    if (timer) { clearTimeout(timer); timer = null; }
+    if (auto) timer = setTimeout(function () { if (!document.hidden) load(true); else schedule(); }, 15000);
+  }
+
+  // ---- load ----------------------------------------------------------------------
+  // The list is fetched for the window only; every other filter is applied
+  // here, so the facets can count and take several values.
+  function load(quiet) {
+    var my = ++seq;
+    document.body.classList.add("busy");
+    var p = new URLSearchParams(); if (st.since) p.set("since", st.since);
+    fetch("/runs/data.json?" + p.toString(), { credentials: "same-origin", headers: { Accept: "application/json" } })
+      .then(function (r) {
+        if (!r.ok) return r.text().then(function (t) { throw new Error(r.status + ": " + t.trim()); });
+        return r.json();
+      })
+      .then(function (d) { if (my !== seq) return; take(d, quiet); $("error").hidden = true; })
+      .catch(function (e) { if (my !== seq) return; $("error-text").textContent = String(e.message || e); $("error").hidden = false; })
+      .then(function () { if (my !== seq) return; document.body.classList.remove("busy"); $("main").setAttribute("aria-busy", "false"); schedule(); });
+  }
+  function take(d, quiet) {
+    var before = dId && byId[dId] ? byId[dId].status : null, curId = flat[cur] ? (flat[cur].id || null) : null, curGrp = flat[cur] ? flat[cur].grp : null;
+    quietLoad = !!quiet;
+    data = d; byId = {};
+    rows = (d.runs || []).map(function (r) {
+      var o = {}; for (var k in r) o[k] = r[k];
+      o.t = Date.parse(r.started_at); o.bad = r.status === "failed" || r.status === "interrupted";
+      o.mrKey = (r.project_path || "") + "!" + (r.mr_iid || 0);
+      o.mrLabel = (r.project_path ? D.repoName(r.project_path) : "—") + (r.mr_iid ? "!" + r.mr_iid : "");
+      o.text = r.error || r.reason || "";
+      byId[o.id] = o;
+      return o;
+    });
+    // Old links: project=<substring> (the server filter) -> the matching projects.
+    if (!projectsResolved) {
+      projectsResolved = true;
+      var paths = {}; rows.forEach(function (r) { paths[r.project_path] = 1; });
+      var res = [];
+      st.project.forEach(function (p) {
+        if (paths[p]) { res.push(p); return; }
+        var lp = p.toLowerCase(), hit = Object.keys(paths).filter(function (x) { return x.toLowerCase().indexOf(lp) >= 0; });
+        res = res.concat(hit.length ? hit : [p]);
+      });
+      st.project = res.filter(function (x, i) { return res.indexOf(x) === i; });
+    }
+    renderAll();
+    quietLoad = false;
+    // The highlighted row stays the same run (or group) when new rows arrive.
+    if (curId || curGrp != null) {
+      for (var i = 0; i < flat.length; i++) if ((curId && flat[i].id === curId) || (!curId && flat[i].grp === curGrp)) { if (i !== cur) { cur = i; drawTable(filtered()); } break; }
+    }
+    if (!quiet || !dId) openFromHash(!loadedOnce);
+    else if (dId && byId[dId] && byId[dId].status !== before) { drawerTitle(byId[dId]); rd.refresh(); }
+    loadedOnce = true;
+  }
+
+  // ---- filtering -----------------------------------------------------------------
+  function uname(r) { return r.username || "—"; }
+  function window0() { return rows; }
+  function match(r, skip, f) {
+    f = f || st;
+    if (skip !== "status" && f.status && f.status.length && f.status.indexOf(r.status) < 0) return false;
+    if (skip !== "kind" && f.kind && f.kind.length && f.kind.indexOf(r.kind) < 0) return false;
+    if (skip !== "project" && f.project && f.project.length && f.project.indexOf(r.project_path) < 0) return false;
+    if (skip !== "user" && f.user && f.user.length && f.user.indexOf(uname(r)) < 0) return false;
+    if (f.claude && !(r.claude_runs > 0)) return false;
+    if (skip !== "time" && f.from && !(r.t >= f.from && r.t <= f.to)) return false;
+    if (f.mr && String(r.mr_iid) !== String(f.mr)) return false;
+    if (f.q) {
+      var needle = f.q.toLowerCase();
+      if ((r.text + " " + (r.mr_title || "") + " " + r.mrLabel + " " + (r.project_path || "") + " " + D.kindLabel(r.kind) + " " + uname(r) + " " + r.id).toLowerCase().indexOf(needle) < 0) return false;
+    }
+    return true;
+  }
+  function filtered() { return rows.filter(function (r) { return match(r); }); }
+  function changed() { cur = -1; limit = PAGE; push(); renderAll(); }
+
+  // ---- render ----------------------------------------------------------------------
+  function pad(x) { return x < 10 ? "0" + x : "" + x; }
+  function hm(t) { var d = new Date(t); return pad(d.getHours()) + ":" + pad(d.getMinutes()); }
+  function median(a) { if (!a.length) return 0; a = a.slice().sort(function (x, y) { return x - y; }); return a[Math.floor(a.length / 2)]; }
+  function pctl(a, p) { if (!a.length) return 0; a = a.slice().sort(function (x, y) { return x - y; }); return a[Math.min(a.length - 1, Math.floor(a.length * p))]; }
+  function renderAll() {
+    if (!data) return;
+    syncWindows(data.retention);
+    $("ret").textContent = D.windowLabel(data.retention);
+    $("range").textContent = "За последние " + D.windowLabel(data.filter.since) + " · " + D.dateTime(data.since) + " — " + D.dateTime(data.until);
+    $("trunc").hidden = !data.truncated;
+    $("trunc").textContent = data.truncated ? "В окне больше задач, чем помещается в список: показаны и фильтруются последние " + D.full(rows.length) + ". Сузьте окно (6ч / 24ч)." : "";
+    var rs = filtered();
+    drawStats(rs); drawLive(); drawFacets(); drawViews(); syncBar(); drawTimeline(); drawTable(rs);
+  }
+  function drawStats(rs) {
+    var bad = 0, claude = 0, tok = 0, cost = 0, ds = [];
+    rs.forEach(function (r) { if (r.bad) bad++; claude += r.claude_runs; tok += r.tokens; cost += r.cost_usd; if (r.status !== "running") ds.push(r.duration_ms); });
+    var box = $("stats"); clear(box);
+    function s(v, l, cls) { return h("span", { class: cls || null }, [h("b", { text: v }), " " + l]); }
+    box.appendChild(s(D.full(rs.length), D.plural(rs.length, "задача", "задачи", "задач")));
+    box.appendChild(s(D.full(bad), D.plural(bad, "ошибка", "ошибки", "ошибок") + " (" + (rs.length ? (bad * 100 / rs.length).toFixed(1).replace(".", ",") : "0") + "%)", bad ? "bad" : null));
+    box.appendChild(s(D.full(claude), "Claude"));
+    box.appendChild(h("span", null, [h("b", { text: D.short(tok) }), " ток. · " + D.usd(cost) + " (усл.)"]));
+    box.appendChild(h("span", null, ["медиана ", h("b", { text: ds.length ? D.dur(median(ds)) : "—" }), " · p95 ", h("b", { text: ds.length ? D.dur(pctl(ds, .95)) : "—" })]));
+  }
+
+  // «Сейчас»: running runs of the list (status running) and the persisted
+  // queue (data.queue). A pending automatic review keeps its queue row while
+  // it runs: it counts as running when a running run of the same MR started
+  // after it was due.
+  var liveTimer = null;
+  function mmss(ms) { ms = Math.max(0, ms); var s = Math.round(ms / 1000); return Math.floor(s / 60) + ":" + pad(s % 60); }
+  function drawLive() {
+    var el = $("live"), qd = data.queue, now = Date.now();
+    clear(el); el.hidden = false;
+    var running = rows.filter(function (r) { return r.status === "running"; });
+    var extraRun = [], waiting = [], matched = 0;
+    (qd ? qd.items : []).forEach(function (it) {
+      var same = running.filter(function (r) { return r.project_path === it.project_path && r.mr_iid === it.mr_iid && r.kind === it.kind; });
+      if (it.state === "running") { if (!same.length) extraRun.push(it); return; }
+      if (it.auto && same.some(function (r) { return r.t >= Date.parse(it.ready_at) - 1000; })) { matched++; return; }
+      waiting.push(it);
+    });
+    var nRun = running.length + extraRun.length, nWait = qd ? Math.max(0, qd.waiting - matched) : 0;
+    var pulse = h("span", { class: "pulse " + (nRun ? "on" : "idle"), "aria-hidden": "true" });
+    if (!nRun && !nWait) {
+      var last = rows[0];
+      el.appendChild(h("span", { class: "lh" }, [pulse, qd ? "Сейчас ничего не выполняется, очередь пуста" : "Сейчас ничего не выполняется"]));
+      if (last) el.appendChild(h("span", { class: "last", text: "· последняя задача — " + D.kindLabel(last.kind) + " " + last.mrLabel + ", " + ago(now - last.t) + " (" + hm(last.t) + ")" }));
+      if (liveTimer) { clearInterval(liveTimer); liveTimer = null; }
+      return;
+    }
+    el.appendChild(h("span", { class: "lh" }, [pulse, "Сейчас: " + nRun + " " + D.plural(nRun, "выполняется", "выполняются", "выполняются") + (qd ? " · " + nWait + " в очереди" : "")]));
+    running.forEach(function (r) {
+      var b = h("button", { type: "button", class: "litem", title: "Открыть в панели · " + r.id }, [h("span", { class: "sdot running" }), h("span", { class: "k", text: D.kindLabel(r.kind) }),
+        h("span", { class: "m", text: r.mrLabel }), h("span", { class: "t", "data-since": String(r.t), text: mmss(now - r.t) })]);
+      b.addEventListener("click", function () { openDrawer(r.id); });
+      el.appendChild(b);
+    });
+    extraRun.forEach(function (it) { el.appendChild(qItem(it, now)); });
+    waiting.forEach(function (it) { el.appendChild(qItem(it, now)); });
+    if (qd && qd.running + qd.waiting > qd.items.length) el.appendChild(h("span", { class: "last", text: "и ещё " + (qd.running + qd.waiting - qd.items.length) }));
+    if (!liveTimer) liveTimer = setInterval(tickLive, 1000);
+  }
+  function qItem(it, now) {
+    var run = it.state === "running", label = (it.project_path ? D.repoName(it.project_path) : "—") + (it.mr_iid ? "!" + it.mr_iid : "");
+    var t = run ? h("span", { class: "t", "data-since": String(Date.parse(it.started_at)), text: mmss(now - Date.parse(it.started_at)) })
+      : h("span", { class: "t", "data-ready": String(Date.parse(it.ready_at) || 0), text: readyText(Date.parse(it.ready_at) || 0, now) });
+    return h("span", { class: "litem" + (run ? "" : " q"), title: (run ? "выполняется" : "в очереди") + (it.username ? " · @" + it.username : "") + (D.zero(it.enqueued_at) ? "" : " · поставлена " + D.dateTime(it.enqueued_at)) },
+      [h("span", { class: "sdot " + (run ? "running" : "skipped") }), h("span", { class: "k", text: D.kindLabel(it.kind) }), h("span", { class: "m", text: label }), t]);
+  }
+  function readyText(at, now) { return at > now ? "через " + mmss(at - now) : "ждёт воркера"; }
+  function tickLive() {
+    var now = Date.now(), any = false;
+    D.each($("live").querySelectorAll("[data-since]"), function (e) { any = true; e.textContent = mmss(now - +e.dataset.since); });
+    D.each($("live").querySelectorAll("[data-ready]"), function (e) { any = true; e.textContent = readyText(+e.dataset.ready, now); });
+    if (!any && liveTimer) { clearInterval(liveTimer); liveTimer = null; }
+  }
+  function ago(ms) { var m = Math.round(ms / 60000); if (m < 1) return "только что"; if (m < 60) return m + " мин назад"; var hh = Math.floor(m / 60); return hh + " ч " + (m % 60) + " мин назад"; }
+
+  // ---- facets: counts with the other filters applied -------------------------------
+  var FACETS = [
+    { id: "status", title: "Статус", get: function (r) { return r.status; }, label: function (k) { return [h("span", { class: "sdot " + k }), D.STATUS[k] || k]; }, lim: 6 },
+    { id: "kind", title: "Тип", get: function (r) { return r.kind; }, label: function (k) { return D.kindLabel(k); }, lim: 7 },
+    { id: "project", title: "Проект", get: function (r) { return r.project_path; }, label: function (k) { return D.repoName(k) || "—"; }, lim: 6 },
+    { id: "user", title: "Автор", get: uname, label: function (k) { return k === "—" ? h("span", { class: "muted", text: "без автора (CI)" }) : "@" + k; }, lim: 5 }
+  ];
+  function drawFacets() {
+    var box = $("facets"); clear(box);
+    FACETS.forEach(function (F) {
+      var c = {}, tot = {};
+      rows.forEach(function (r) { var v = F.get(r); tot[v] = (tot[v] || 0) + 1; if (match(r, F.id)) c[v] = (c[v] || 0) + 1; });
+      st[F.id].forEach(function (v) { if (!(v in tot)) tot[v] = 0; });
+      var keys = Object.keys(tot).sort(function (a, b) { return (c[b] || 0) - (c[a] || 0) || tot[b] - tot[a]; });
+      var mx = Math.max.apply(null, keys.map(function (k) { return c[k] || 0; }).concat([1]));
+      var lim = facetMore[F.id] ? keys.length : F.lim;
+      var sec = h("div", { class: "facet" }, h("h3", null, [F.title, st[F.id].length ? h("button", { type: "button", class: "linkbtn", "data-fclr": F.id, text: "сбросить" }) : null]));
+      var ul = h("ul");
+      keys.slice(0, lim).forEach(function (k) {
+        var n = c[k] || 0;
+        ul.appendChild(h("li", null, h("label", { class: "fopt" + (n ? "" : " zero"), title: k }, [
+          h("input", { type: "checkbox", "data-f": F.id, value: k, checked: st[F.id].indexOf(k) >= 0 }),
+          h("span", { class: "nm" }, F.label(k)), h("span", { class: "c", text: String(n) }),
+          h("span", { class: "fb", "aria-hidden": "true" }, h("i", { css: { width: (n / mx * 100) + "%" } }))])));
+      });
+      sec.appendChild(ul);
+      if (keys.length > lim) sec.appendChild(h("button", { type: "button", class: "linkbtn morebtn", "data-fmore": F.id, text: "ещё " + (keys.length - lim) }));
+      else if (facetMore[F.id] && keys.length > F.lim) sec.appendChild(h("button", { type: "button", class: "linkbtn morebtn", "data-fless": F.id, text: "свернуть" }));
+      if (!keys.length) sec.appendChild(h("p", { class: "muted fopt", text: "нет задач" }));
+      box.appendChild(sec);
+    });
+  }
+  $("facets").addEventListener("change", function (e) {
+    var i = e.target; if (!i.dataset || !i.dataset.f) return;
+    var a = st[i.dataset.f], at = a.indexOf(i.value);
+    if (i.checked && at < 0) a.push(i.value); else if (!i.checked && at >= 0) a.splice(at, 1);
+    changed();
+  });
+  $("facets").addEventListener("click", function (e) {
+    var b = e.target.closest("button"); if (!b) return;
+    if (b.dataset.fclr) { st[b.dataset.fclr] = []; changed(); }
+    else if (b.dataset.fmore) { facetMore[b.dataset.fmore] = 1; drawFacets(); }
+    else if (b.dataset.fless) { facetMore[b.dataset.fless] = 0; drawFacets(); }
+  });
+
+  // ---- saved filter sets (tabs; own sets in localStorage) --------------------------
+  var BUILTIN = [
+    { name: "Все", f: {} },
+    { name: "Ошибки", f: { status: ["failed", "interrupted"] } },
+    { name: "Пропуски", f: { status: ["skipped"], group: "err" } },
+    { name: "С Claude", f: { claude: "1" } }
+  ];
+  var views = lsGet(VIEWS_KEY, []);
+  if (!Array.isArray(views)) views = [];
+  function norm(f) {
+    f = f || {};
+    return { status: (f.status || []).slice().sort(), kind: (f.kind || []).slice().sort(), project: (f.project || []).slice().sort(), user: (f.user || []).slice().sort(),
+      mr: f.mr || "", q: f.q || "", claude: f.claude || "", group: f.group || "" };
+  }
+  function cur0() { return norm(st); }
+  function sameF(f) { return JSON.stringify(norm(f)) === JSON.stringify(cur0()); }
+  function allViews() { return BUILTIN.concat(views); }
+  function applyView(f) {
+    var n = norm(f);
+    MULTI.forEach(function (k) { st[k] = n[k]; });
+    st.mr = n.mr; st.q = n.q; st.claude = n.claude; st.group = n.group; st.from = st.to = 0; gopen = {};
+    changed();
+  }
+  function autoName() {
+    var p = [];
+    if (st.status.length) p.push(st.status.map(function (s) { return D.STATUS[s] || s; }).join("+"));
+    if (st.kind.length) p.push(st.kind.length > 2 ? st.kind.length + " типа" : st.kind.map(D.kindLabel).join("+"));
+    if (st.project.length) p.push(st.project.map(D.repoName).join("+"));
+    if (st.user.length) p.push(st.user.map(function (u) { return u === "—" ? "без автора" : "@" + u; }).join("+"));
+    if (st.mr) p.push("!" + st.mr);
+    if (st.claude) p.push("с Claude");
+    if (st.q) p.push("«" + st.q + "»");
+    if (st.group) p.push("по " + ({ mr: "MR", kind: "типу", project: "проекту", err: "причине" }[st.group] || st.group));
+    return p.join(" · ") || "Мой набор";
+  }
+  function drawViews() {
+    var box = $("views"), act = -1; clear(box);
+    allViews().forEach(function (v, i) { if (act < 0 && sameF(v.f)) act = i; });
+    allViews().forEach(function (v, i) {
+      var n = rows.filter(function (r) { return match(r, "time", norm(v.f)); }).length;
+      var b = h("button", { type: "button", class: "view", role: "tab", "data-v": String(i), "aria-selected": String(i === act), title: i < 9 ? "Клавиша " + (i + 1) : null }, [
+        v.name, h("span", { class: "count" + (v.name === "Ошибки" && n ? " bad" : ""), text: String(n) }),
+        i >= BUILTIN.length ? h("span", { class: "del", role: "button", tabindex: "0", "data-del": String(i - BUILTIN.length), "aria-label": "Удалить набор «" + v.name + "»", title: "Удалить набор", text: "×" }) : null]);
+      box.appendChild(b);
+    });
+    if (act < 0) box.appendChild(h("button", { type: "button", class: "btn sm addv", "data-addv": "1", text: "+ Сохранить набор" }));
+  }
+  $("views").addEventListener("click", function (e) {
+    var d = e.target.closest("[data-del]");
+    if (d) { views.splice(+d.dataset.del, 1); lsSet(VIEWS_KEY, views); drawViews(); e.stopPropagation(); return; }
+    var b = e.target.closest("button"); if (!b) return;
+    if (b.dataset.addv) { views.push({ name: autoName(), f: norm(st) }); lsSet(VIEWS_KEY, views); drawViews(); RunDetail.toast("Набор сохранён как вкладка"); return; }
+    if (b.dataset.v != null) applyView(allViews()[+b.dataset.v].f);
+  });
+  $("views").addEventListener("keydown", function (e) { var d = e.target.closest("[data-del]"); if (d && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); d.click(); } });
+
+  // ---- time ribbon (instead of the hourly chart): one tick per job ------------------
+  var LANES = [["bad", "ошибки"], ["postponed", "отложено"], ["skipped", "пропущено"], ["ok", "успешно"]];
+  function svg(tag, attrs, kids) {
+    var e = document.createElementNS(SVGNS, tag);
+    for (var k in attrs) if (attrs[k] != null) e.setAttribute(k, String(attrs[k]));
+    (kids || []).forEach(function (c) { if (c) e.appendChild(c); });
+    return e;
+  }
+  function span() {
+    var now = Date.parse(data.until), t0 = rows.length ? Math.min.apply(null, rows.map(function (r) { return r.t; })) : now - 3600e3;
+    t0 = Math.max(Date.parse(data.since), t0 - 5 * 60e3);
+    var a = new Date(t0); a.setMinutes(0, 0, 0);
+    return [a.getTime(), Math.max(now, a.getTime() + 3600e3)];
+  }
+  var tlState = null;
+  function drawTimeline() {
+    var box = $("tl"); clear(box);
+    var W = Math.max(320, box.clientWidth || 800), H = 86, L = 64, R = 8, T = 4, lh = 15, Bt = T + LANES.length * lh;
+    var sp = span(), x = function (t) { return L + (t - sp[0]) / (sp[1] - sp[0]) * (W - L - R); };
+    var s = svg("svg", { class: "rbn", width: W, height: H, viewBox: "0 0 " + W + " " + H });
+    LANES.forEach(function (l, i) {
+      s.appendChild(svg("rect", { class: "lane", x: L, y: T + i * lh, width: W - L - R, height: lh - 2 }));
+      var tx = svg("text", { class: "lt", x: L - 6, y: T + i * lh + 10, "text-anchor": "end" }); tx.textContent = l[1]; s.appendChild(tx);
+    });
+    var stepH = (sp[1] - sp[0]) / 3600e3 > 30 ? 3 : 1;
+    for (var t = sp[0], n = 0; t <= sp[1]; t += 3600e3, n++) {
+      var xx = x(t);
+      s.appendChild(svg("line", { class: "gl", x1: xx, x2: xx, y1: T, y2: Bt + 2 }));
+      if (n % (W > 600 ? stepH : stepH * 2) === 0) { var ax = svg("text", { class: "ax", x: xx, y: H - 4, "text-anchor": n === 0 ? "start" : "middle" }); ax.textContent = hm(t); s.appendChild(ax); }
+    }
+    var hl = flat[cur] && flat[cur].id ? flat[cur].id : dId;
+    rows.forEach(function (r) {
+      var li = r.bad ? 0 : r.status === "postponed" ? 1 : r.status === "skipped" ? 2 : 3, on = match(r, "time");
+      var tk = svg("rect", { class: "tk " + r.status + (on ? "" : " dim") + (r.id === hl ? " hl" : ""), x: (x(r.t) - (r.bad ? 1.5 : 1)).toFixed(1), y: T + li * lh + 1, width: r.bad ? 3 : 2, height: lh - 4 });
+      var ti = svg("title"); ti.textContent = hm(r.t) + " · " + D.kindLabel(r.kind) + " " + r.mrLabel + " · " + (D.STATUS[r.status] || r.status) + (r.text ? " · " + r.text.slice(0, 100) : "");
+      tk.appendChild(ti); s.appendChild(tk);
+    });
+    if (st.from) s.appendChild(svg("rect", { class: "brush", x: x(st.from), y: T, width: Math.max(2, x(st.to) - x(st.from)), height: Bt - T }));
+    var brush = svg("rect", { class: "brush", x: 0, y: T, width: 0, height: Bt - T, visibility: "hidden" });
+    s.appendChild(brush);
+    box.appendChild(s);
+    tlState = { s: s, brush: brush, L: L, R: R, W: W, sp: sp };
+    var cap = $("tlcap"); clear(cap);
+    if (st.from) {
+      cap.appendChild(document.createTextNode("Выбрано " + hm(st.from) + "–" + hm(st.to) + " · "));
+      cap.appendChild(h("button", { type: "button", class: "linkbtn", "data-tlclr": "1", text: "сбросить" }));
+    } else cap.textContent = "Задачи во времени · " + hm(sp[0]) + "–" + hm(sp[1]) + (sp[0] > Date.parse(data.since) + 3600e3 ? " (раньше в окне задач не было)" : "");
+  }
+  (function () {
+    var drag = null;
+    function px(e) { var b = tlState.s.getBoundingClientRect(); return Math.max(tlState.L, Math.min(tlState.W - tlState.R, (e.clientX - b.left) * tlState.W / b.width)); }
+    function inv(p) { var S = tlState; return S.sp[0] + (p - S.L) / (S.W - S.L - S.R) * (S.sp[1] - S.sp[0]); }
+    var box = $("tl");
+    box.addEventListener("pointerdown", function (e) { if (!tlState || e.button !== 0) return; drag = { x0: px(e) }; box.setPointerCapture(e.pointerId); });
+    box.addEventListener("pointermove", function (e) {
+      if (!drag) return;
+      var x1 = px(e), b = tlState.brush;
+      b.setAttribute("visibility", "visible"); b.setAttribute("x", Math.min(drag.x0, x1)); b.setAttribute("width", Math.abs(x1 - drag.x0));
+    });
+    box.addEventListener("pointerup", function (e) {
+      if (!drag) return;
+      var x1 = px(e), a = Math.min(drag.x0, x1), b = Math.max(drag.x0, x1); drag = null;
+      if (b - a > 4) { st.from = inv(a); st.to = inv(b); changed(); } else tlState.brush.setAttribute("visibility", "hidden");
+    });
+    box.addEventListener("dblclick", function () { if (st.from) { st.from = st.to = 0; changed(); } });
+  })();
+  $("tlcap").addEventListener("click", function (e) { if (e.target.closest("[data-tlclr]")) { st.from = st.to = 0; changed(); } });
+  // Redraw the ribbon when its box changes width (window, side panel, scrollbar).
+  var rsT = 0;
+  function tlResized() { clearTimeout(rsT); rsT = setTimeout(function () { if (data && tlState && Math.abs($("tl").clientWidth - tlState.W) > 2) drawTimeline(); }, 120); }
+  if (window.ResizeObserver) new ResizeObserver(tlResized).observe($("tl"));
+  else window.addEventListener("resize", tlResized);
+
+  // ---- the table -------------------------------------------------------------------
+  $("group").addEventListener("click", function (e) { var b = e.target.closest("button"); if (!b) return; st.group = b.dataset.g; gopen = {}; changed(); });
+  function sig(r) { return (r.text || "").replace(/\b\d+(\.\d+)?(ms|s|m|h)\b/g, "N$2").replace(/\b[0-9a-f]{7,40}\b/g, "…"); }
+  function sortRuns(rs) {
+    var k = st.sort, d = st.dir;
+    var f = function (r) { return k === "t" ? r.t : k === "d" ? r.duration_ms : k === "c" ? r.claude_runs : k === "k" ? r.tokens : r.cost_usd; };
+    return rs.slice().sort(function (a, b) { return (f(a) - f(b)) * d || (b.t - a.t); });
+  }
+  function th(lbl, key, cls) {
+    var on = st.sort === key;
+    return h("th", { class: cls || null, "aria-sort": on ? (st.dir > 0 ? "ascending" : "descending") : null },
+      h("button", { type: "button", class: "sort", "data-sort": key, "data-dir": on ? String(st.dir) : null }, [lbl, h("span", { class: "ar", "aria-hidden": "true", text: on && st.dir > 0 ? "↑" : "↓" })]));
+  }
+  var P95 = 1;
+  function mrCell(r) {
+    var href = D.safeHref(r.mr_url);
+    return h("td", { class: "t-mr" }, h("div", { class: "mrl" }, [
+      href ? h("a", { href: href, target: "_blank", rel: "noopener noreferrer", title: (r.project_path || "") + (r.mr_iid ? "!" + r.mr_iid : ""), text: r.mrLabel }) : h("b", { title: r.project_path || "", text: r.mrLabel }),
+      r.mr_title ? h("span", { class: "s hide-m hide-d", text: r.mr_title }) : null]));
+  }
+  function rowEl(r, i, nested) {
+    var o = !!open[r.id], w = Math.min(100, r.duration_ms / P95 * 100);
+    var tr = h("tr", { class: "click run" + (i === cur ? " cur" : "") + (r.id === dId ? " dsel" : ""), "data-i": String(i), "data-id": r.id, "aria-expanded": String(o), "aria-current": r.id === dId ? "true" : null }, [
+      h("td", { class: "ck" }, h("input", { type: "checkbox", "data-sel": r.id, checked: !!sel[r.id], "aria-label": "Выбрать " + r.id })),
+      h("td", { class: "tm", title: D.dateTime(r.started_at) }, nested ? h("span", { class: "muted", text: D.time(r.started_at) }) : D.time(r.started_at)),
+      h("td", { class: "nw kd" }, [D.kindLabel(r.kind), r.attempt > 1 ? h("span", { class: "muted", text: " ↻" + r.attempt }) : null]),
+      mrCell(r),
+      h("td", { class: "nw hide-m hide-t hide-l hide-d", text: r.username ? "@" + r.username : "—" }),
+      h("td", null, h("span", { class: "st" + (r.bad ? " bad" : ""), title: D.STATUS[r.status] || r.status }, [h("span", { class: "sdot " + r.status }), h("span", { class: "stl", text: D.STATUS[r.status] || r.status })])),
+      h("td", { class: "num" }, h("span", { class: "dbar" }, [h("span", { class: "tr hide-m", "aria-hidden": "true" }, h("i", { class: r.duration_ms > P95 ? "slow" : null, css: { width: w + "%" } })),
+        r.status === "running" ? "идёт" : D.dur(r.duration_ms)])),
+      h("td", { class: "num hide-m hide-d hide-x", text: r.claude_runs || "·" }),
+      h("td", { class: "num hide-m hide-d hide-y", text: r.tokens ? D.short(r.tokens) : "·" }),
+      h("td", { class: "num hide-m hide-t hide-l hide-d", text: r.cost_usd ? D.usd(r.cost_usd) : "·" }),
+      h("td", { class: (r.error ? "err" : "why") + " t-reason hide-m hide-d", title: r.text || null },
+        h("div", { class: "clip", text: r.status === "postponed" && !D.zero(r.retry_at) ? "до " + D.time(r.retry_at) + ": " + (r.reason || "") : r.text }))
+    ]);
+    return tr;
+  }
+  function xpRow(r) {
+    function kv(k, v, cls) { return h("div", { class: cls === true ? "full" : cls || null }, [h("div", { class: "k", text: k }), h("div", { class: "v" }, v)]); }
+    var page = "/runs/" + encodeURIComponent(r.id);
+    var box = h("div", { class: "xpd" }, [
+      kv("ID", [h("span", { class: "mono", text: r.id }), h("button", { type: "button", class: "copyb", "data-copy": r.id, "aria-label": "Скопировать ID", title: "Скопировать ID", text: "⧉" })], "w2"),
+      kv("Начало", D.dateTime(r.started_at) + ":" + pad(new Date(r.t).getSeconds())),
+      kv("Длительность", [D.dur(r.duration_ms), r.duration_ms > P95 ? h("span", { class: "badge b-postponed", text: "дольше 95%" }) : null]),
+      kv("Claude · токены · $", r.claude_runs + " · " + D.full(r.tokens) + " · " + D.usd(r.cost_usd)),
+      kv("Автор", r.username ? "@" + r.username : "—"),
+      kv("Проект", r.project_path || "—"),
+      r.mr_title ? kv("MR", [r.mrLabel, " ", r.mr_title], true) : null,
+      r.text ? h("div", { class: "full" }, [h("div", { class: "k", text: r.error ? "Ошибка" : "Причина" }), h("pre", { class: r.error ? "e" : null, text: r.text + (r.status === "postponed" && !D.zero(r.retry_at) ? "\nповтор в " + D.time(r.retry_at) : "") })]) : null,
+      h("div", { class: "acts" }, [h("button", { type: "button", class: "btn sm", "data-open": r.id, text: "Открыть в панели" }), h("a", { class: "btn sm", href: page, text: "Открыть страницей" }),
+        r.mr_iid ? h("button", { type: "button", class: "btn sm", "data-onlymr": r.mrKey, text: "Все задачи " + r.mrLabel }) : null,
+        r.text ? h("button", { type: "button", class: "btn sm", "data-copy": r.text, text: "Скопировать текст" }) : null])
+    ]);
+    return h("tr", { class: "xp" }, h("td", { colspan: "11" }, box));
+  }
+  function groupKey(r) {
+    return st.group === "mr" ? r.mrKey : st.group === "kind" ? r.kind : st.group === "project" ? (r.project_path || "—") : (r.text ? sig(r) : "— без причины (успешно)");
+  }
+  function drawTable(rs) {
+    var t = $("t-runs"); clear(t);
+    rs = sortRuns(rs);
+    P95 = pctl(rows.map(function (r) { return r.duration_ms; }), .95) || 1;
+    D.each($("group").children, function (b) { b.setAttribute("aria-pressed", String(b.dataset.g === st.group)); });
+    t.appendChild(h("thead", null, h("tr", null, [h("th", { class: "ck" }, h("input", { type: "checkbox", id: "sel-all", "aria-label": "Выбрать все видимые" })), th("Время", "t"),
+      h("th", { text: "Тип" }), h("th", { text: "MR" }), h("th", { class: "hide-m hide-t hide-l hide-d", text: "Кто" }), h("th", { text: "Статус" }), th("Длит.", "d", "num"),
+      th("Claude", "c", "num hide-m hide-d hide-x"), th("Токены", "k", "num hide-m hide-d hide-y"), th("$", "u", "num hide-m hide-t hide-l hide-d"), h("th", { class: "hide-m hide-d", text: "Причина / ошибка" })])));
+    var body = h("tbody");
+    flat = [];
+    if (!rs.length) {
+      body.appendChild(h("tr", { class: "empty-row" }, h("td", { colspan: "11" }, [rows.length ? "Нет задач по этим фильтрам. " : "В окне нет задач. ",
+        rows.length ? h("button", { type: "button", class: "linkbtn", "data-cx": "1", text: "Сбросить фильтры" }) : null])));
+    } else if (st.group) {
+      var g = {}, order = [];
+      rs.forEach(function (r) { var k = groupKey(r); if (!g[k]) { g[k] = []; order.push(k); } g[k].push(r); });
+      order.sort(function (a, b) {
+        var ba = g[a].filter(function (r) { return r.bad; }).length, bb = g[b].filter(function (r) { return r.bad; }).length;
+        return (bb - ba) || (g[b].length - g[a].length);
+      });
+      order.forEach(function (k) {
+        var lst = g[k], c = { ok: 0, skipped: 0, postponed: 0, failed: 0, running: 0 }, tok = 0, cl = 0, cost = 0, bad = 0, dsum = 0;
+        lst.forEach(function (r) { c[r.bad ? "failed" : (r.status in c ? r.status : "ok")]++; tok += r.tokens; cl += r.claude_runs; cost += r.cost_usd; dsum += r.duration_ms; if (r.bad) bad++; });
+        var first = lst[0], name;
+        if (st.group === "mr") name = h("div", { class: "mrl" }, [D.safeHref(first.mr_url) ? h("a", { href: D.safeHref(first.mr_url), target: "_blank", rel: "noopener noreferrer", text: first.mrLabel }) : h("b", { text: first.mrLabel }),
+          h("span", { class: "s", text: first.mr_iid ? (first.mr_title || "") : "без MR (пайплайны веток)" })]);
+        else if (st.group === "kind") name = h("b", { text: D.kindLabel(k) });
+        else if (st.group === "project") name = h("span", null, [h("b", { text: D.repoName(k) }), " ", h("span", { class: "muted", text: k })]);
+        else name = h("span", { class: "clip", title: k, text: k });
+        var mini = h("span", { class: "mini", "aria-label": c.ok + " успешно, " + c.skipped + " пропущено, " + c.postponed + " отложено, " + c.failed + " ошибок" });
+        ["ok", "skipped", "postponed", "failed", "running"].forEach(function (s) { if (c[s]) mini.appendChild(h("i", { class: s, css: { flex: String(c[s]) } })); });
+        var gi = flat.length; flat.push({ grp: k });
+        var chev = document.createElementNS(SVGNS, "svg"); chev.setAttribute("class", "chev"); chev.setAttribute("viewBox", "0 0 16 16"); chev.setAttribute("aria-hidden", "true");
+        chev.appendChild(svg("path", { d: "M6 3l5 5-5 5", fill: "none", stroke: "currentColor", "stroke-width": "1.8" }));
+        body.appendChild(h("tr", { class: "click grp" + (gi === cur ? " cur" : ""), "data-i": String(gi), "aria-expanded": String(!!gopen[k]) }, [
+          h("td", { class: "ck" }), h("td", { colspan: "3", class: "t-mr" }, h("div", { class: "gname" }, [chev, name])),
+          h("td", { class: "hide-m hide-t hide-l hide-d" }, h("span", { class: "muted", text: "посл. " + D.time(first.started_at) })),
+          h("td", null, mini),
+          h("td", { class: "num" }, [bad ? h("span", { class: "fail", text: bad + " ош. · " }) : null, String(lst.length)]),
+          h("td", { class: "num hide-m hide-d hide-x", text: cl || "·" }), h("td", { class: "num hide-m hide-d hide-y", text: tok ? D.short(tok) : "·" }),
+          h("td", { class: "num hide-m hide-t hide-l hide-d", text: cost ? D.usd(cost) : "·" }),
+          h("td", { class: "why t-reason hide-m hide-d" }, h("div", { class: "clip", text: "медиана " + D.dur(median(lst.map(function (r) { return r.duration_ms; }))) }))]));
+        if (gopen[k]) lst.forEach(function (r) { var i = flat.length; flat.push(r); body.appendChild(rowEl(r, i, true)); if (open[r.id]) body.appendChild(xpRow(r)); });
+      });
+    } else {
+      rs.slice(0, limit).forEach(function (r) { var i = flat.length; flat.push(r); body.appendChild(rowEl(r, i)); if (open[r.id]) body.appendChild(xpRow(r)); });
+      if (rs.length > limit) body.appendChild(h("tr", { class: "more-row" }, h("td", { colspan: "11" }, [h("span", { class: "muted", text: "Показаны " + D.full(limit) + " из " + D.full(rs.length) + " · " }),
+        h("button", { type: "button", class: "linkbtn", "data-more": "1", text: "показать ещё " + Math.min(PAGE, rs.length - limit) })])));
+    }
+    t.appendChild(body);
+    if (dId) { for (var i = 0; i < flat.length; i++) if (flat[i].id === dId) { cur = i; break; } }
+    drawBulk();
+  }
+  function drawBulk() {
+    var ids = Object.keys(sel).filter(function (k) { return sel[k]; }), el = $("bulk");
+    clear(el); el.hidden = !ids.length;
+    if (!ids.length) return;
+    el.appendChild(h("b", { text: "Выбрано: " + ids.length }));
+    el.appendChild(h("button", { type: "button", class: "btn sm", "data-bcopy": "1", text: "Скопировать ID" }));
+    el.appendChild(h("button", { type: "button", class: "btn sm", "data-bmd": "1", text: "Скопировать списком для issue" }));
+    el.appendChild(h("button", { type: "button", class: "linkbtn", "data-bclr": "1", text: "снять выбор" }));
+  }
+  $("bulk").addEventListener("click", function (e) {
+    var b = e.target.closest("button"); if (!b) return;
+    var ids = Object.keys(sel).filter(function (k) { return sel[k]; });
+    if (b.dataset.bcopy) RunDetail.copy(ids.join("\n"), "Скопировано ID: " + ids.length);
+    else if (b.dataset.bmd) RunDetail.copy(ids.map(function (id) {
+      var r = byId[id];
+      return r ? "- " + D.dateTime(r.started_at) + " " + D.kindLabel(r.kind) + " " + r.mrLabel + " — " + (D.STATUS[r.status] || r.status) + (r.text ? ": " + r.text : "") + " (" + location.origin + "/runs/" + id + ")" : "- " + id;
+    }).join("\n"), "Список скопирован");
+    else if (b.dataset.bclr) { sel = {}; drawTable(filtered()); }
+  });
+  $("t-runs").addEventListener("change", function (e) {
+    var i = e.target;
+    if (i.id === "sel-all") { flat.forEach(function (r) { if (r.id) sel[r.id] = i.checked; }); drawTable(filtered()); return; }
+    if (i.dataset.sel) { sel[i.dataset.sel] = i.checked; drawBulk(); }
+  });
+  $("t-runs").addEventListener("click", function (e) {
+    var b = e.target.closest("button");
+    if (b && b.dataset.sort) { var k = b.dataset.sort; if (st.sort === k) st.dir = -st.dir; else { st.sort = k; st.dir = -1; } drawTable(filtered()); return; }
+    if (b && b.dataset.copy) { RunDetail.copy(b.dataset.copy, b.dataset.copy.length > 40 ? "Текст скопирован" : "ID скопирован"); return; }
+    if (b && b.dataset.onlymr) { var r0 = rows.filter(function (x) { return x.mrKey === b.dataset.onlymr; })[0]; if (r0) { st.project = [r0.project_path]; st.mr = String(r0.mr_iid); changed(); } return; }
+    if (b && b.dataset.open) { openDrawer(b.dataset.open); return; }
+    if (b && b.dataset.more) { limit += PAGE; drawTable(filtered()); return; }
+    if (b && b.dataset.cx) { MULTI.forEach(function (k) { st[k] = []; }); st.mr = st.q = st.claude = ""; st.from = st.to = 0; changed(); return; }
+    if (e.target.closest("a, input, .xp, button")) return;
+    var tr = e.target.closest("tr[data-i]"); if (!tr) return;
+    cur = +tr.dataset.i;
+    var rr = flat[cur];
+    if (rr && rr.id) openDrawer(rr.id); else toggle();
+  });
+  function toggle() {
+    var r = flat[cur]; if (!r) return;
+    if (r.grp != null) gopen[r.grp] = !gopen[r.grp]; else open[r.id] = !open[r.id];
+    drawTable(filtered()); scrollCur();
+  }
+  function scrollCur() { var el = $("t-runs").querySelector("tr.cur, tr.dsel"); if (el) el.scrollIntoView({ block: "nearest" }); }
+  function move(d) {
+    if (!flat.length) return;
+    cur = cur < 0 ? (d > 0 ? 0 : flat.length - 1) : Math.max(0, Math.min(flat.length - 1, cur + d));
+    if (dId && flat[cur] && flat[cur].id) { openDrawer(flat[cur].id); return; }
+    drawTable(filtered()); drawTimeline(); scrollCur();
+  }
+
+  // ---- the side panel ----------------------------------------------------------------
+  var dId = null, dFull = false;
+  var rd = RunDetail.create($("d-body"), {
+    layout: "drawer",
+    // «Этот MR»: the runs of the same MR in the loaded window, whatever the filters.
+    mrRuns: function (j) { return rows.filter(function (r) { return r.project_path === j.project_path && r.mr_iid === j.mr_iid; }); },
+    onPick: function (id) { openDrawer(id); },
+    onLoad: function (r) { if (!byId[r.id]) drawerTitle({ id: r.id, status: r.status, kind: (r.job || {}).kind, t: Date.parse(r.started_at), mrLabel: "" }); }
+  });
+  function dwApply() {
+    var w = +lsGet(DW_KEY, 560) || 560;
+    $("grid").style.setProperty("--dw", w + "px");
+  }
+  function setFull(on) {
+    dFull = on; $("grid").classList.toggle("dfull", on);
+    $("d-full").setAttribute("aria-pressed", String(on)); $("d-full").textContent = on ? "свернуть" : "развернуть";
+  }
+  function drawerTitle(r) {
+    var tt = $("d-title"); clear(tt);
+    tt.appendChild(D.badge(r.status));
+    tt.appendChild(h("b", { text: D.kindLabel(r.kind) }));
+    tt.appendChild(h("span", { class: "muted", text: hm(r.t) }));
+    tt.title = D.kindLabel(r.kind) + (r.mrLabel ? " · " + r.mrLabel : "") + " · " + D.time(new Date(r.t).toISOString()) + " · " + r.id;
+  }
+  // keep: opened from the address on load; the list is not scrolled to the row.
+  function openDrawer(id, keep) {
+    if (!/^[0-9]{8}-[0-9]{6}-[0-9a-f]{8}$/.test(id)) return;
+    var r = byId[id], first = !dId;
+    dId = id;
+    for (var i = 0; i < flat.length; i++) if (flat[i].id === id) { cur = i; break; }
+    $("grid").classList.add("dopen"); dwApply();
+    $("drawer").hidden = false; document.body.classList.add("rdw-on");
+    if (r) drawerTitle(r); else { clear($("d-title")); $("d-title").appendChild(h("b", { text: id })); }
+    $("d-page").href = "/runs/" + encodeURIComponent(id);
+    rd.show(id);
+    $("d-body").scrollTop = 0;
+    writeHash();
+    drawTable(filtered()); drawTimeline();
+    if (keep) return;
+    scrollCur();
+    if (first) $("d-close").focus({ preventScroll: true });
+  }
+  function closeDrawer() {
+    if (!dId) return;
+    dId = null; setFull(false); rd.clear();
+    $("drawer").hidden = true; $("grid").classList.remove("dopen"); document.body.classList.remove("rdw-on");
+    writeHash(); drawTable(filtered()); drawTimeline(); scrollCur();
+    var row = $("t-runs").querySelector("tr.cur"); if (row) row.focus({ preventScroll: true });
+  }
+  function writeHash() {
+    var want = dId ? "#run=" + dId : "";
+    if (location.hash !== want) history.replaceState(null, "", location.pathname + location.search + want);
+  }
+  function hashRun() { var m = /^#run=([0-9]{8}-[0-9]{6}-[0-9a-f]{8})$/.exec(location.hash); return m ? m[1] : ""; }
+  function openFromHash(keep) { var id = hashRun(); if (id && id !== dId) openDrawer(id, keep === true); else if (!id && dId) closeDrawer(); }
+  window.addEventListener("hashchange", openFromHash);
+  $("d-close").addEventListener("click", closeDrawer);
+  $("d-back").addEventListener("click", closeDrawer);
+  $("d-full").addEventListener("click", function () { setFull(!dFull); });
+  $("d-prev").addEventListener("click", function () { move(-1); });
+  $("d-next").addEventListener("click", function () { move(1); });
+  (function () {
+    var grip = $("grip"), drag = null;
+    function setW(w) { var gw = $("grid").clientWidth; w = Math.round(Math.max(380, Math.min(gw - 340, w))); lsSet(DW_KEY, w); dwApply(); }
+    grip.addEventListener("pointerdown", function (e) { drag = { x: e.clientX, w: $("drawer").offsetWidth }; grip.setPointerCapture(e.pointerId); grip.classList.add("drag"); e.preventDefault(); });
+    grip.addEventListener("pointermove", function (e) { if (drag) setW(drag.w + (drag.x - e.clientX)); });
+    grip.addEventListener("pointerup", function () { drag = null; grip.classList.remove("drag"); if (data) drawTimeline(); });
+    grip.addEventListener("keydown", function (e) {
+      if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+      setW($("drawer").offsetWidth + (e.key === "ArrowLeft" ? 40 : -40)); e.preventDefault(); e.stopPropagation();
+    });
+  })();
+
+  // ---- keyboard ----------------------------------------------------------------------
+  function help(on) { $("kbdhelp").hidden = !on; $("kbd-btn").setAttribute("aria-expanded", String(on)); }
+  $("kbd-btn").addEventListener("click", function () { help($("kbdhelp").hidden); });
+  $("kbd-close").addEventListener("click", function () { help(false); });
+  document.addEventListener("keydown", function (e) {
+    // Typing = text entry; a focused checkbox (row select, facets, «автообновление») keeps the shortcuts.
+    var t = e.target, typing = t && ((t.tagName === "INPUT" && !/^(checkbox|radio|button|submit|reset)$/.test(t.type)) || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable);
+    if (e.key === "Escape") {
+      if (!$("kbdhelp").hidden) { help(false); return; }
+      if (typing || (t && t.closest && t.closest(".rf-pop, .rf-field"))) return; // the filter bar closes its own lists
+      if (dId) { closeDrawer(); e.preventDefault(); }
+      return;
+    }
+    if (typing || e.metaKey || e.ctrlKey || e.altKey) return;
+    var inPanel = t && t.closest && t.closest("#drawer");
+    var inCtl = t && t.closest && t.closest("button, a, input, .rf");
+    var k = e.key;
+    if (k === "j" || (k === "ArrowDown" && !inPanel)) { move(1); e.preventDefault(); }
+    else if (k === "k" || (k === "ArrowUp" && !inPanel)) { move(-1); e.preventDefault(); }
+    else if ((k === "o" || (k === " " && !inCtl)) && !inPanel) { if (cur >= 0) toggle(); e.preventDefault(); }
+    else if (k === "Enter" && e.shiftKey && !inCtl) { var r0 = dId ? byId[dId] || { id: dId } : flat[cur]; if (r0 && r0.id) location.href = "/runs/" + encodeURIComponent(r0.id); e.preventDefault(); }
+    else if (k === "Enter" && !inPanel && !inCtl) { var r = flat[cur]; if (r && r.id) openDrawer(r.id); else if (r) toggle(); e.preventDefault(); }
+    else if (k === "f" && dId) setFull(!dFull);
+    else if (k === "x") { var r2 = flat[cur]; if (r2 && r2.id) { sel[r2.id] = !sel[r2.id]; drawTable(filtered()); } }
+    else if (k === "/") { var qi = bar ? bar.root.querySelector('[data-key="q"] input') : $("f-q"); if (qi) { qi.focus(); e.preventDefault(); } }
+    else if (k === "?") help($("kbdhelp").hidden);
+    else if (/^[1-9]$/.test(k)) { var v = allViews()[+k - 1]; if (v) applyView(v.f); }
+  });
+
+  load();
+})();
+</script>
+</body>
+</html>

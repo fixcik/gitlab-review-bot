@@ -1,0 +1,7 @@
+{
+  "branch": "feat/json-output",
+  "title": "feat: вывод пользователя в JSON",
+  "scenarios": "B12",
+  "description": "Флаг `-json`.",
+  "expect": "Проект в `gitlab.exclude`: MR и `@reviewbot …` игнорируются (лог `excluded (gitlab.exclude)`), `sync-hooks` показывает «исключено: 1». Ревью `rb-backend` `api/drop-user-email` по-прежнему может сослаться на `rb-excluded` как на потребителя `email`; с `review.context.exclude` — нет."
+}

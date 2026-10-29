@@ -1,0 +1,7 @@
+{
+  "branch": "feat/soft-delete-order",
+  "title": "feat: мягкое удаление заказа (PROJ-11)",
+  "scenarios": "U14, U16",
+  "description": "`DELETE /orders/{order_id}` больше не удаляет заказ, а переводит в статус `cancelled` и отвечает 200 с телом. Пара к MR `rb-web` `chore/drop-order-cancel` (общая стори PROJ-10 в Jira).",
+  "expect": "Локально Jira выключена: блока «🔗 Связанные MR» по общей стори нет — U14/U15 проверяются на бою. Ничего не блокируется данными фазы B (U16)."
+}

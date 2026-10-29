@@ -1,0 +1,7 @@
+{
+  "branch": "mig/up-down-frameworks",
+  "title": "chore: индексы и удаление note в трёх инструментах миграций",
+  "scenarios": "V8",
+  "description": "goose (удаление колонки в Up, `DROP TABLE` в Down), Flyway `V5__…` + `U5__…`, golang-migrate `0003_….up.sql` / `.down.sql`.",
+  "expect": "В списке файлов промпта только Up-файлы с фреймворками (goose, Flyway, golang-migrate); в подсказках — только операции Up / `V5` / `.up.sql` (ничего из Down, `U5`, `.down.sql`)."
+}

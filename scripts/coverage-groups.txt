@@ -1,0 +1,9 @@
+# Coverage floors for the critical functionality, checked by scripts/coverage.sh
+# (CI fails when a group drops below its floor).
+# Format: <floor %> | <group name> | <regexp on the module-relative file path>
+98 | security: sandbox, tokens, secrets, untrusted text | ^internal/(safefs|claude|egress|mcpserver|learn|webhook)/|^internal/gitlab/(policy|client|request|errors)\.go$|^internal/repo/(git|symlinks|tar|attributes)\.go$|^internal/diag/scrub\.go$|^internal/review/(mdtext|marker)/|^internal/usageweb/auth\.go$
+98 | merge gate and thread lifecycle | ^internal/review/(flow|review_publish|review_summary|check|bigmr|trivial)[^/]*\.go$|^internal/review/(publish|mrthread|summary|finding)/
+98 | verification and compatibility | ^internal/review/(verify|compatcheck|migcheck)/
+98 | limits and queue | ^internal/(limits|queue)/|^internal/store/queue(jobs|pending)\.go$
+98 | config and repo config | ^internal/config/|^internal/review/repoconfig[^/]*\.go$
+98 | events: webhook, poller, router | ^internal/(events|webhook|poller)/

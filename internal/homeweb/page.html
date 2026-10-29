@@ -1,0 +1,73 @@
+{{define "txt"}}{{range .}}{{if .Href}}<a href="{{.Href}}"{{if .Bad}} class="bad"{{end}}>{{.Text}}</a>{{else if .Bold}}<b>{{.Text}}</b>{{else if .Bad}}<span class="bad">{{.Text}}</span>{{else if .Muted}}<span class="muted">{{.Text}}</span>{{else}}{{.Text}}{{end}}{{end}}{{end}}
+{{- define "spark"}}<svg class="spark" viewBox="{{.ViewBox}}" preserveAspectRatio="none" aria-hidden="true"><path class="area" d="{{.Area}}"/><path class="ln" d="{{.Line}}"/>{{if .Marks}}<path class="fl" d="{{.Marks}}"/>{{end}}{{range .Hours}}<g class="h" data-label="{{.Label}}"><title>{{.Label}}</title><rect class="hit" x="{{.X}}" y="0" width="1" height="30"/><line class="cur" x1="{{.Mid}}" x2="{{.Mid}}" y1="0" y2="30"/><path class="dot" d="{{.Dot}}"/></g>{{end}}</svg>{{end}}
+{{- define "bar"}}<svg class="bar2" viewBox="{{.ViewBox}}" preserveAspectRatio="none" aria-hidden="true">{{range .Parts}}<rect class="{{.Class}}" x="{{.X}}" y="0" width="{{.W}}" height="1"><title>{{.Title}}</title></rect>{{end}}</svg>{{end -}}
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Ревью-бот</title>
+<script nonce="{{.Nonce}}">
+try { var t0 = localStorage.getItem("reviewbot-usage-theme"); if (t0 === "light" || t0 === "dark") document.documentElement.setAttribute("data-theme", t0); } catch (e) {}
+</script>
+<style nonce="{{.Nonce}}">
+{{.CommonCSS}}
+</style>
+</head>
+<body>
+{{.Header}}
+
+<main id="main">
+  <div class="h-head">
+    <h1>Ревью-бот</h1>
+    {{if .Status}}<p id="status"><span class="pulse{{if .Live}} live{{end}}" aria-hidden="true"></span>{{template "txt" .Status}}</p>{{end}}
+  </div>
+
+  <section class="hkpis{{if eq (len .KPIs) 3}} n3{{else if eq (len .KPIs) 2}} n2{{else if eq (len .KPIs) 1}} n1{{end}}" aria-label="Состояние за сутки">
+    {{range .KPIs}}<div class="hkpi" id="k-{{.ID}}">
+      <div class="hl"><span>{{.Label}}</span>{{if .Spark}}<span class="at" aria-hidden="true"></span>{{end}}</div>
+      <div class="val">{{.Value}}</div>
+      <div class="sub">{{template "txt" .Sub}}</div>
+      {{if .Spark}}{{template "spark" .Spark}}{{else if .Bar}}{{template "bar" .Bar}}{{end}}
+    </div>
+    {{end}}
+  </section>
+
+  {{if .Tabs}}<section class="panel" aria-labelledby="attn-h">
+    {{range .Tabs}}<input class="sr" type="radio" name="attn" id="t-{{.ID}}" aria-controls="tp-{{.ID}}"{{if .Checked}} checked{{end}}>
+    {{end}}<div class="panel-h">
+      <h2 id="attn-h">Требует внимания</h2>
+      <div class="tabs">
+        {{range .Tabs}}<label for="t-{{.ID}}">{{.Label}} <span class="n">{{.Count}}</span></label>
+        {{end}}
+      </div>
+    </div>
+    {{range .Tabs}}<div class="tp tp-{{.ID}}" id="tp-{{.ID}}">
+      {{if .Error}}<p class="empty-ok err"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><circle cx="8" cy="8" r="6.25"/><path d="M8 4.75v4M8 11.25v.01"/></svg>Не удалось прочитать — подробности в логах бота.</p>
+      {{else if .Rows}}<ul class="alist">
+        {{range .Rows}}<li><a class="arow" href="{{.Href}}"><span class="sev {{.Sev}}" title="{{.SevTitle}}"></span><span class="t">{{.Title}}</span><span class="w">{{.When}}</span><span class="d">{{if .Project}}<span class="p">{{.Project}}</span>{{if .Detail}} — {{end}}{{end}}{{.Detail}}</span></a></li>
+        {{end}}
+      </ul>
+      {{else}}<p class="empty-ok"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="8" r="6.25"/><path d="m5.25 8.25 1.9 1.9 3.6-3.9"/></svg>{{.Empty}}</p>
+      {{end}}{{if .Foot}}<div class="panel-f">{{range .Foot}}{{if .Href}}<a href="{{.Href}}">{{.Text}}</a>{{else}}<span class="muted">{{.Text}}</span>{{end}}{{end}}</div>{{end}}
+    </div>
+    {{end}}
+  </section>{{end}}
+
+  <h2 class="sect-h">Разделы</h2>
+  <nav class="hcards" aria-label="Разделы бота">
+    {{range .Cards}}<a class="tile" href="{{.Href}}"><h3>{{.Title}}</h3><p>{{.Text}}</p>{{if .Figs}}<div class="fig">{{range .Figs}}<span{{if .Bad}} class="bad"{{else if .Muted}} class="muted"{{end}}>{{.Text}}</span>{{end}}</div>{{end}}</a>
+    {{end}}
+  </nav>
+</main>
+
+<script nonce="{{.Nonce}}">
+{{.CommonJS}}
+</script>
+<script nonce="{{.Nonce}}">
+D.initTheme();
+</script>
+<script nonce="{{.Nonce}}" src="{{.PageJS}}"></script>
+</body>
+</html>

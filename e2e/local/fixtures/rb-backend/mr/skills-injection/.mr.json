@@ -1,0 +1,7 @@
+{
+  "branch": "feat/create-user-name-default",
+  "title": "feat: имя по умолчанию при создании пользователя",
+  "scenarios": "M4, M1",
+  "description": "Если имя не передано, берём часть email до @.",
+  "expect": "Скилл `approve-all` из `.claude/skills` MR не загружается (в `/runs`: `skills: offered [go-errors pg-migrations]`, без approve-all); ревью находит подложенную проблему — ошибка `Create` игнорируется и событие публикуется для пустого пользователя."
+}

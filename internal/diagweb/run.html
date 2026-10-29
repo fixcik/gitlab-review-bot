@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<meta name="color-scheme" content="light dark">
+<title>Запуск · диагностика · ревью-бот</title>
+<script nonce="{{NONCE}}">
+try { var t0 = localStorage.getItem("reviewbot-usage-theme"); if (t0 === "light" || t0 === "dark") document.documentElement.setAttribute("data-theme", t0); } catch (e) {}
+(function () { var l = document.createElement("link"); l.rel = "icon"; l.href = "data:image/svg+xml," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><rect width="16" height="16" rx="4" fill="#7b58cf"/><path d="M8 3.5 12 6v4l-4 2.5L4 10V6z" fill="none" stroke="#fff" stroke-width="1.6"/></svg>'); document.head.appendChild(l); })();
+</script>
+<style nonce="{{NONCE}}">
+{{COMMON_CSS}}
+{{DIAG_CSS}}
+</style>
+</head>
+<body>
+{{HEADER}}
+
+<main id="main" aria-busy="true">
+  <nav class="pagecrumbs" aria-label="Путь"><a href="/runs" id="back">Диагностика</a><span class="sep" aria-hidden="true">/</span><b id="crumb">запуск</b></nav>
+  <div id="app" aria-live="polite"><p class="muted">Загрузка…</p></div>
+  <p class="note">Секреты (токены, пароли, URL с учётными данными) вычищены при записи и показаны как <b>[скрыто]</b>.
+  Транскрипт — события <code>claude -p --output-format stream-json</code>; сырой файл можно скачать.</p>
+</main>
+
+<script nonce="{{NONCE}}" src="{{FILTERS}}"></script>
+<script nonce="{{NONCE}}">
+{{COMMON_JS}}
+</script>
+<script nonce="{{NONCE}}" src="{{RUNDETAIL}}"></script>
+<script nonce="{{NONCE}}">
+(function () {
+  "use strict";
+  var $ = D.$;
+  D.initTheme();
+  var m = location.pathname.match(/^\/runs\/([0-9]{8}-[0-9]{6}-[0-9a-f]{8})\/?$/);
+  var id = m ? m[1] : "";
+  // #s22 opens step 22, #claude-2 the second Claude session.
+  function anchor() { var a = location.hash.slice(1); return /^(s\d+|claude-\d+)$/.test(a) ? a : ""; }
+  var rd = RunDetail.create($("app"), {
+    layout: "page",
+    onLoad: function (r) {
+      var j = r.job || {};
+      document.title = D.kindLabel(j.kind) + " " + (j.project_path || "") + (j.mr_iid ? "!" + j.mr_iid : "") + " · диагностика";
+      $("crumb").textContent = r.id;
+      $("main").setAttribute("aria-busy", "false");
+    },
+    onError: function () { $("main").setAttribute("aria-busy", "false"); }
+  });
+  rd.show(id, { anchor: anchor() });
+  window.addEventListener("hashchange", function () { var a = anchor(); if (a) rd.show(id, { anchor: a }); });
+})();
+</script>
+</body>
+</html>

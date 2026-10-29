@@ -1,0 +1,13 @@
+[project]
+name = "rb-orders-py"
+version = "1.2.0"
+description = "Orders service of the reviewbot sandbox (FastAPI)"
+requires-python = ">=3.11"
+dependencies = ["fastapi>=0.115", "uvicorn>=0.30", "requests>=2.32"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B"]

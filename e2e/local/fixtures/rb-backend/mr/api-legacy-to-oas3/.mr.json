@@ -1,0 +1,7 @@
+{
+  "branch": "api/legacy-to-oas3",
+  "title": "refactor: перевести legacy API аккаунтов на OpenAPI 3.0",
+  "scenarios": "J10",
+  "description": "`api/swagger.yaml` переписан в OpenAPI 3.0 (тот же путь файла). Заодно убрано поле `currency` из ответа `Account`.",
+  "expect": "Конвертируется только старая сторона (Swagger 2.0); найдено удаление `currency` из ответа, у изменений новой стороны есть номера строк; имя `*.reviewbot-oas3.yaml` нигде не видно."
+}

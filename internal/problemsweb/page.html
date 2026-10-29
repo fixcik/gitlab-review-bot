@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Проблемы проверки · ревью-бот</title>
+<script nonce="{{.Nonce}}">
+document.documentElement.classList.add("js");
+try { var t0 = localStorage.getItem("reviewbot-usage-theme"); if (t0 === "light" || t0 === "dark") document.documentElement.setAttribute("data-theme", t0); } catch (e) {}
+(function () { var l = document.createElement("link"); l.rel = "icon"; l.href = "data:image/svg+xml," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><rect width="16" height="16" rx="4" fill="#7b58cf"/><path d="M8 3.5 12 6v4l-4 2.5L4 10V6z" fill="none" stroke="#fff" stroke-width="1.6"/></svg>'); document.head.appendChild(l); })();
+</script>
+<style nonce="{{.Nonce}}">
+{{.CommonCSS}}
+</style>
+</head>
+<body>
+{{.Header}}
+
+<main id="main">
+  <div class="head">
+    <div>
+      <h1>Проблемы проверки</h1>
+      <p class="range">Что бот не смог проверить во время ревью: инструменты, отчёты, доступы, обрезанный дифф, сообщения модели.</p>
+    </div>
+  </div>
+
+  {{with .Banner}}<div class="notice" role="status">
+    <span>{{.Text}}</span>
+    {{if .Undo}}<form class="inline" method="post" action="/problems/unack">
+      {{range .Undo}}<input type="hidden" name="fingerprint" value="{{.}}">{{end}}
+      <input type="hidden" name="csrf" value="{{$.CSRF}}">
+      <input type="hidden" name="back" value="{{$.Back}}">
+      <button type="submit" class="linkbtn">Вернуть</button>
+    </form>{{end}}
+    {{with .Link}}<a class="navlink" href="{{.Href}}">{{.Label}}</a>{{end}}
+  </div>{{end}}
+
+  <nav class="p-sum" aria-label="Сводка по влиянию">
+    {{range .Summary}}<a href="{{.Href}}"{{if .Current}} aria-current="true"{{end}}>
+      <span class="lbl">{{.Label}}</span><span class="val{{if .Bad}} bad{{end}}">{{.Value}}</span><span class="sub">{{.Sub}}</span>
+    </a>{{end}}
+  </nav>
+
+  <form class="filters" method="get" action="/problems" role="search" aria-label="Фильтры" data-review-filters>
+    <label>Статус
+      <select name="status" data-label="Статус" data-default="new">
+        <option value="new"{{if eq .Status "new"}} selected{{end}}>активные</option>
+        <option value="acked"{{if eq .Status "acked"}} selected{{end}}>скрытые</option>
+        <option value="resolved"{{if eq .Status "resolved"}} selected{{end}}>исправленные</option>
+        <option value="all"{{if eq .Status "all"}} selected{{end}}>все</option>
+      </select>
+    </label>
+    <label>Вид
+      <select name="kind" data-label="Вид" data-type="search-select">
+        <option value="">все</option>
+        {{range .Kinds}}<option value="{{.Value}}" data-group="{{.Group}}" data-count="{{.Count}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>{{end}}
+      </select>
+    </label>
+    <label>Проект
+      <select name="project" data-label="Проект" data-type="search-select">
+        <option value="">все</option>
+        {{range .Projects}}<option value="{{.Value}}" data-count="{{.Count}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>{{end}}
+      </select>
+    </label>
+    <label>Влияние
+      <select name="impact" data-label="Влияние">
+        <option value="">любое</option>
+        {{range .Impacts}}<option value="{{.Value}}" data-count="{{.Count}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>{{end}}
+      </select>
+    </label>
+    <label>Поиск
+      <input type="search" name="q" value="{{.Q}}" data-label="Поиск" placeholder="тема, описание, !MR" data-width="20" maxlength="200">
+    </label>
+    <button type="submit" class="btn sm" data-rf-fallback>Применить</button>
+  </form>
+
+  {{if .Error}}<div class="banner" role="alert"><div><h2>Ошибка</h2><p>{{.Error}}</p></div></div>{{end}}
+
+  <section class="card" aria-labelledby="h-problems">
+    <div class="card-h">
+      <div class="ttl"><h2 id="h-problems">{{.Heading}}</h2><span class="count" data-total>{{.Total}}{{if .Truncated}}+{{end}}</span></div>
+      <p class="hint">{{.SortHint}}</p>
+    </div>
+    {{if or .HasAck .HasUnack}}<div class="p-bulk" data-bulk>
+      <b data-bulk-n>Отметьте строки, чтобы скрыть или вернуть несколько сразу.</b>
+      {{if .HasAck}}<form id="bulk-ack" class="inline" method="post" action="/problems/ack">
+        <input type="hidden" name="csrf" value="{{.CSRF}}">
+        <input type="hidden" name="back" value="{{.Back}}">
+        <button type="submit" class="btn sm primary" data-bulk-btn="bulk-ack">Скрыть выбранные</button>
+      </form>{{end}}
+      {{if .HasUnack}}<form id="bulk-unack" class="inline" method="post" action="/problems/unack">
+        <input type="hidden" name="csrf" value="{{.CSRF}}">
+        <input type="hidden" name="back" value="{{.Back}}">
+        <button type="submit" class="btn sm" data-bulk-btn="bulk-unack">Вернуть выбранные</button>
+      </form>{{end}}
+      <button type="button" class="linkbtn js-only" data-bulk-clear>Снять выбор</button>
+    </div>{{end}}
+    {{if .Rows}}
+    <table class="p-tbl">
+      <thead><tr>
+        <th class="c-sel" scope="col"><span class="sr">Выбор</span><label class="chk js-only"><input type="checkbox" data-select-all aria-label="Выбрать все видимые"></label></th>
+        <th scope="col">{{if eq .Status "new"}}Важность{{else}}Статус{{end}}</th>
+        {{with index .Sorts "prio"}}<th scope="col"{{if .Aria}} aria-sort="{{.Aria}}"{{end}}><a class="sort" href="{{.Href}}">Проблема<span class="ar" aria-hidden="true">{{.Arrow}}</span></a></th>{{end}}
+        {{with index .Sorts "project"}}<th scope="col"{{if .Aria}} aria-sort="{{.Aria}}"{{end}}><a class="sort" href="{{.Href}}">Проект<span class="ar" aria-hidden="true">{{.Arrow}}</span></a></th>{{end}}
+        {{with index .Sorts "count"}}<th scope="col" class="num"{{if .Aria}} aria-sort="{{.Aria}}"{{end}}><a class="sort" href="{{.Href}}">Раз<span class="ar" aria-hidden="true">{{.Arrow}}</span></a></th>{{end}}
+        {{with index .Sorts "last"}}<th scope="col"{{if .Aria}} aria-sort="{{.Aria}}"{{end}}><a class="sort" href="{{.Href}}">Когда<span class="ar" aria-hidden="true">{{.Arrow}}</span></a></th>{{end}}
+        <th scope="col">Ссылки</th>
+        <th scope="col"><span class="sr">Действия</span></th>
+      </tr></thead>
+      {{range .Rows}}
+      <tbody class="p {{.State}}" data-q="{{.Text}}" data-fp="{{.Fingerprint}}"{{if .Hidden}} hidden{{end}}>
+      <tr class="r">
+        <td class="c-sel">{{if .Form}}<label class="chk"><input type="checkbox" name="fingerprint" value="{{.Fingerprint}}" form="{{.Form}}" aria-label="Выбрать: {{.Title}}"></label>{{end}}</td>
+        <td class="c-sev"><span class="stk">{{if .Resolved}}<span class="badge b-ok">исправлена</span>{{else if .Acked}}<span class="badge b-skipped">скрыта</span>{{else if .StateBadge}}<span class="badge b-running">активна</span>{{end}}<span class="badge b-{{.Severity}}">{{.SevLabel}}</span></span></td>
+        <td class="c-p">
+          <div class="ttl">{{.Title}}{{if eq .Source "model"}}<span class="src">сообщила модель</span>{{end}}</div>
+          <div class="sj">{{.Subject}}</div>
+          {{if .Detail}}<div class="dt">{{.Detail}}</div>{{end}}
+          <div class="dt"><span class="imp"><span class="dot i-{{.Impact}}" aria-hidden="true"></span>{{.ImpactLabel}}</span></div>
+        </td>
+        <td class="c-prj"><span class="g">{{.Group}}</span><span class="mono">{{.Short}}</span></td>
+        <td class="c-n num">{{.Count}}</td>
+        <td class="c-when">{{.LastSeen}}<small>{{.Ago}}</small><small>впервые {{.FirstSeen}}</small></td>
+        <td class="c-links">{{if .MRURL}}<a class="navlink" href="{{.MRURL}}" rel="noopener noreferrer" target="_blank">{{.MRLabel}}</a>{{else if .MRLabel}}<span>{{.MRLabel}}</span>{{end}}{{if .RunURL}}<a class="navlink" href="{{.RunURL}}">запуск</a>{{end}}</td>
+        <td class="c-act"><span class="acts">
+          <button type="button" class="btn sm js-only" aria-expanded="false" aria-controls="fix-{{.Fingerprint}}" data-fix><svg class="chev" width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 3 5 5-5 5"/></svg>Как исправить</button>
+          {{if eq .Form "bulk-ack"}}<form class="inline" method="post" action="/problems/ack">
+            <input type="hidden" name="fingerprint" value="{{.Fingerprint}}">
+            <input type="hidden" name="csrf" value="{{$.CSRF}}">
+            <input type="hidden" name="back" value="{{$.Back}}">
+            <button type="submit" class="btn sm">Скрыть</button>
+          </form>{{else if eq .Form "bulk-unack"}}<form class="inline" method="post" action="/problems/unack">
+            <input type="hidden" name="fingerprint" value="{{.Fingerprint}}">
+            <input type="hidden" name="csrf" value="{{$.CSRF}}">
+            <input type="hidden" name="back" value="{{$.Back}}">
+            <button type="submit" class="btn sm">Вернуть</button>
+          </form>{{end}}
+        </span></td>
+      </tr>
+      <tr class="fix" id="fix-{{.Fingerprint}}">
+        <td colspan="8"><div class="p-fix">
+          <div>
+            <h3>Как исправить: {{.Action}}</h3>
+            <ol class="steps">
+              {{range .Steps}}{{if .Or}}<li class="or">или</li>{{end}}<li><div class="tx">
+                <div>{{range .Segs}}{{if .Code}}<code>{{.Text}}</code>{{else}}{{.Text}}{{end}}{{end}}</div>
+                {{with .Snippet}}<div class="snip">
+                  <div class="snip-h"><span class="f">{{.File}}</span><span class="w">{{.Where}}</span>{{if .Example}}<span class="ex">пример</span>{{end}}<span class="spacer"></span><button type="button" class="copy js-only" data-copy aria-label="Скопировать: {{.File}}">Копировать</button></div>
+                  <pre>{{.Code}}</pre>
+                </div>{{end}}
+              </div></li>{{end}}
+            </ol>
+          </div>
+          <div class="side">
+            <div><h4>История</h4>
+              <p class="stl"><span>появилась <b>{{.FirstSeen}}</b></span>{{if gt .Count 1}}<span>{{.Count}} раз, последний <b>{{.LastSeen}}</b></span>{{end}}{{if .Resolved}}<span>исправлена <b>{{.ResolvedAt}}</b></span>{{else if .Acked}}<span>скрыта <b>{{.AckedAt}}</b> · вернётся, если повторится</span>{{else}}<span>активна</span>{{end}}</p>
+            </div>
+            {{if .Hint}}<div><h4>Подсказка целиком</h4><p class="hintline">{{range .Hint}}{{if .Code}}<code>{{.Text}}</code>{{else}}{{.Text}}{{end}}{{end}}</p></div>{{end}}
+          </div>
+        </div></td>
+      </tr>
+      </tbody>
+      {{end}}
+    </table>
+    <div class="empty" data-qempty{{if .Total}} hidden{{end}}><h3>Под поиск ничего не попало</h3><p>Измените или сотрите запрос в поле «Поиск».</p></div>
+    {{else}}{{with .Empty}}
+    <div class="empty{{if .Calm}} calm{{end}}">
+      {{if .Calm}}<div class="ico" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg></div>{{end}}
+      <h3>{{.Title}}</h3>
+      <p>{{.Text}}</p>
+      {{if .Links}}<div class="act">{{range .Links}}<a class="btn sm" href="{{.Href}}">{{.Label}}</a>{{end}}</div>{{end}}
+    </div>
+    {{end}}{{end}}
+  </section>
+
+  <p class="note"><b>Что здесь:</b> одна строка на проблему (вид + проект + тема без чисел, хешей и временных путей).
+  Тексты пришли от инструментов и от модели — это недоверенные данные; секреты вычищаются при записи.
+  Запись о запуске (/runs) хранится меньше, чем проблема, и может быть уже удалена.</p>
+</main>
+
+<script nonce="{{.Nonce}}" src="{{.Filters}}"></script>
+<script nonce="{{.Nonce}}">
+{{.CommonJS}}
+</script>
+<script nonce="{{.Nonce}}" src="{{.PageJS}}"></script>
+<script nonce="{{.Nonce}}">
+D.initTheme();
+</script>
+</body>
+</html>

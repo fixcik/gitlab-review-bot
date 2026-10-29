@@ -1,0 +1,7 @@
+{
+  "branch": "mig/drop-status-legacy-ref",
+  "title": "refactor: удалить orders.status и orders.legacy_ref",
+  "scenarios": "V10",
+  "description": "`status` встречается во многих файлах (`internal/jobs`, `internal/health`), `orders` — в `internal/store/orders.go`; `legacy_ref` — только в комментарии и в тесте.",
+  "expect": "Для `status` пометка «generic name», кандидаты только из файлов, где упоминается таблица (`internal/store/orders.go`); для `legacy_ref` — «no occurrence»; `deployed_usage` на строку-комментарий или тест понижается."
+}

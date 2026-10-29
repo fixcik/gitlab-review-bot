@@ -1,0 +1,7 @@
+{
+  "branch": "feat/welcome-retry",
+  "title": "feat: повтор отправки приветственного письма",
+  "scenarios": "L5, L6, G4",
+  "description": "До трёх попыток отправки письма.",
+  "expect": "В контексте есть `reviewbot-sandbox-ext/ext-client`; в саммари предупреждение со списком недоступных related: `ext-secret` (нет доступа) и `ext-clinet` (опечатка). L6: с `max_repos: 2` related всё равно в контексте."
+}

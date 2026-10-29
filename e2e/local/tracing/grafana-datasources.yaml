@@ -1,0 +1,18 @@
+# Grafana datasource for the local stand (profile "tracing"): Tempo with a
+# fixed uid, so tracing.ui_url in e2e/local/config.yaml can link to it.
+apiVersion: 1
+
+datasources:
+  - name: Tempo
+    type: tempo
+    uid: tempo
+    access: proxy
+    orgId: 1
+    url: http://tempo:3200
+    basicAuth: false
+    isDefault: true
+    editable: false
+    jsonData:
+      httpMethod: GET
+      streamingEnabled:
+        search: true

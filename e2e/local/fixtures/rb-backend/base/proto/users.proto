@@ -1,0 +1,28 @@
+syntax = "proto3";
+
+package users.v1;
+
+option go_package = "gitlab.local/reviewbot-sandbox/rb-backend/gen/usersv1";
+
+// UserCreated is published to the users topic after a user is created.
+// rb-consumer decodes it.
+message UserCreated {
+  string id = 1;
+  string email = 2;
+  string name = 3;
+  int64 created_at_unix = 4;
+}
+
+message GetUserRequest {
+  string id = 1;
+}
+
+message User {
+  string id = 1;
+  string email = 2;
+  string name = 3;
+}
+
+service UsersService {
+  rpc GetUser(GetUserRequest) returns (User);
+}

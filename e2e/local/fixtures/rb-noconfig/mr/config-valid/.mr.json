@@ -1,0 +1,7 @@
+{
+  "branch": "chore/reviewbot-config",
+  "title": "chore: подключить ревью-бота",
+  "scenarios": "R9",
+  "description": "Добавляем `.reviewbot.yaml` — репозиторий подключается к ревью.",
+  "expect": "Ревью нет, одна заметка «✅ Новый `.reviewbot.yaml` валиден — ревью этого репозитория начнётся после мержа MR в `main`». После мержа (в пределах 5 минут кэша) MR `feat/shout` ревьюится: `@reviewbot review` или новый пуш."
+}

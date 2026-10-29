@@ -1,0 +1,62 @@
+openapi: 3.0.3
+info:
+  title: rb-backend legacy accounts API
+  version: 1.0.0
+servers:
+  - url: /api/legacy
+paths:
+  /accounts:
+    post:
+      operationId: createAccount
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AccountCreate"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Account"
+  /accounts/{id}:
+    get:
+      operationId: getAccount
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: The account
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Account"
+        "404":
+          description: Not found
+components:
+  schemas:
+    AccountCreate:
+      type: object
+      required: [email]
+      properties:
+        email:
+          type: string
+        name:
+          type: string
+        currency:
+          type: string
+    Account:
+      type: object
+      properties:
+        id:
+          type: string
+        email:
+          type: string
+        balance:
+          type: number

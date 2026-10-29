@@ -1,0 +1,38 @@
+openapi: 3.0.3
+info: {title: Orders, version: "1.1"}
+paths:
+  /orders:
+    post:
+      operationId: createOrder
+      description: Создать заказ (новое описание)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [currency]
+              properties:
+                currency: {type: string}
+                amount: {type: number}
+                comment: {type: string}
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total: {type: string}
+  /orders/{id}:
+    get:
+      parameters: [{name: id, in: path, required: true, schema: {type: string}}]
+      responses:
+        "200": {description: ok}
+        "404": {description: not found}
+  /orders/{id}/history:
+    get:
+      parameters: [{name: id, in: path, required: true, schema: {type: string}}]
+      responses:
+        "200": {description: ok}

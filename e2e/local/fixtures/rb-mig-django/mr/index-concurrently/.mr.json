@@ -1,0 +1,7 @@
+{
+  "branch": "mig/status-index-concurrently",
+  "title": "perf: индекс по статусу без блокировки",
+  "scenarios": "V7",
+  "description": "`AddIndexConcurrently`, `atomic = False`.",
+  "expect": "Подсказки про индекс нет (V7, вариант с `AddIndexConcurrently`)."
+}

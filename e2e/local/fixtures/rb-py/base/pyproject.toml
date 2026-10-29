@@ -1,0 +1,23 @@
+[project]
+name = "rb-py"
+version = "0.3.0"
+description = "Pricing rules of the reviewbot sandbox"
+requires-python = ">=3.11"
+
+[project.optional-dependencies]
+test = ["pytest>=8", "pytest-cov>=5"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+
+[tool.coverage.run]
+source = ["src/rb_py"]
+relative_files = true
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]

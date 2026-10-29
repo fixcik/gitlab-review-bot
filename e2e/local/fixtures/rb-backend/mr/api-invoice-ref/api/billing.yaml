@@ -1,0 +1,26 @@
+openapi: 3.0.3
+info:
+  title: rb-backend billing API
+  version: 1.0.0
+paths:
+  /api/v1/invoices/{id}:
+    get:
+      operationId: getInvoice
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: expand
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: The invoice
+          content:
+            application/json:
+              schema:
+                $ref: "./schemas/invoice.yaml"

@@ -1,0 +1,7 @@
+{
+  "branch": "mig/drop-old-flag",
+  "title": "chore: удалить неиспользуемую колонку orders.old_flag",
+  "scenarios": "V2",
+  "description": "`old_flag` нигде в коде не используется.",
+  "expect": "В промпте «Text search found no occurrence in the deployed code (merge base)…»; замечаний critical нет, мерж не блокируется."
+}

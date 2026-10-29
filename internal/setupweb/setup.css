@@ -1,0 +1,40 @@
+/* /setup: the doctor report. Status colours on top of the shared tokens
+   (light, the dark media query and the manual toggle, like common.css). */
+:root { --ok: #108548; --ok-soft: #ecf4ee; --warn: #9e5400; --warn-soft: #fdf1dd; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --ok: #52b87a; --ok-soft: #1a3324; --warn: #e9a23b; --warn-soft: #3a2c12; }
+}
+:root[data-theme="dark"] { --ok: #52b87a; --ok-soft: #1a3324; --warn: #e9a23b; --warn-soft: #3a2c12; }
+
+.setup { max-width: 960px; }
+.setup .head { align-items: flex-start; }
+.setup .lead { margin: 4px 0 0; color: var(--text-2); max-width: 680px; }
+.setup .btn { text-decoration: none; gap: 6px; }
+
+.sum { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 28px; padding: 14px 16px; margin-bottom: 16px; }
+.sum .n { color: var(--text-2); }
+.sum .n b { font-size: 22px; line-height: 28px; font-weight: 600; color: var(--text-strong); margin-right: 2px; }
+.sum .n.ok b { color: var(--ok); }
+.sum .n.fail b { color: var(--danger); }
+.sum .n.warn b { color: var(--warn); }
+.sum .at { margin-left: auto; font-size: 12px; }
+
+.checks ul { list-style: none; margin: 0; padding: 0; }
+.chk { display: grid; grid-template-columns: 24px minmax(0, 1fr); gap: 10px; padding: 12px 16px; border-top: 1px solid var(--line); }
+.chk:first-child { border-top: 0; }
+.chk .i { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-size: 13px; font-weight: 700; line-height: 1; }
+.chk.ok .i { background: var(--ok-soft); color: var(--ok); }
+.chk.fail .i { background: var(--danger-soft); color: var(--danger); }
+.chk.warn .i { background: var(--warn-soft); color: var(--warn); }
+.chk.skip .i { background: var(--subtle); color: var(--text-3); }
+.chk .t { font-weight: 600; color: var(--text-strong); }
+.chk.skip .t { color: var(--text-2); font-weight: 400; }
+.chk .d { color: var(--text-2); overflow-wrap: anywhere; }
+.chk .act { margin-top: 6px; padding: 6px 10px; border-radius: 4px; background: var(--surface-2); border: 1px solid var(--line);
+  font: 12.5px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color: var(--text); overflow-wrap: anywhere; }
+.chk.fail .act { border-color: var(--danger-line); }
+
+@media (max-width: 640px) {
+  .setup .head { flex-direction: column; }
+  .sum .at { margin-left: 0; width: 100%; }
+}

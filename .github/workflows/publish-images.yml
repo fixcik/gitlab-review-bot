@@ -1,0 +1,146 @@
+# Publishes the two images to ghcr.io as multi-arch manifests
+# (linux/amd64 + linux/arm64):
+#   ghcr.io/fixcik/gitlab-review-bot          (Dockerfile: reviewbot serve / egress)
+#   ghcr.io/fixcik/gitlab-review-bot-sandbox  (Dockerfile.sandbox: Claude CLI + checkers)
+#
+# Tags: a pushed tag vX.Y.Z -> X.Y.Z, X.Y and latest; a push to main -> edge
+# and sha-<7>. Never on pull requests.
+#
+# Each platform builds on a native runner (ubuntu-24.04 / ubuntu-24.04-arm):
+# the service image compiles go-sqlite3 with cgo, which under QEMU is slow
+# and flaky; native runners also run the sandbox image's self-checks
+# (claude --version, gitleaks version, ...) on the real architecture. Each
+# build pushes by digest only; the "manifest" job then creates the tagged
+# multi-arch manifest from both digests (docker buildx imagetools create).
+#
+# Security: read-only contents, packages: write only in these jobs, the
+# GITHUB_TOKEN for ghcr (docker/login-action), no persisted git
+# credentials, actions pinned by commit SHA. Labels and annotations are the
+# OCI ones from docker/metadata-action (source, revision, version, created,
+# licenses); provenance attestations stay at buildx's default (mode=min), no
+# SBOM.
+name: publish-images
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-images-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  build:
+    name: build ${{ matrix.image.name }} (${{ matrix.platform.arch }})
+    runs-on: ${{ matrix.platform.runner }}
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        image:
+          - { name: gitlab-review-bot, dockerfile: Dockerfile }
+          - { name: gitlab-review-bot-sandbox, dockerfile: Dockerfile.sandbox }
+        platform:
+          - { arch: amd64, os: linux/amd64, runner: ubuntu-24.04 }
+          - { arch: arm64, os: linux/arm64, runner: ubuntu-24.04-arm }
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - id: meta
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
+        with:
+          images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.image.name }}
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: build
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: ${{ matrix.image.dockerfile }}
+          platforms: ${{ matrix.platform.os }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            VERSION=${{ steps.meta.outputs.version }}
+          outputs: type=image,name=${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.image.name }},push-by-digest=true,name-canonical=true,push=true
+          cache-from: type=gha,scope=${{ matrix.image.name }}-${{ matrix.platform.arch }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image.name }}-${{ matrix.platform.arch }}
+      - name: export digest
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/digests"
+          touch "$RUNNER_TEMP/digests/${DIGEST#sha256:}"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: digests-${{ matrix.platform.arch }}-${{ matrix.image.name }}
+          path: ${{ runner.temp }}/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  manifest:
+    name: manifest ${{ matrix.image }}
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        image: [gitlab-review-bot, gitlab-review-bot-sandbox]
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          pattern: digests-*-${{ matrix.image }}
+          merge-multiple: true
+          path: ${{ runner.temp }}/digests
+      - id: meta
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
+        with:
+          images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.image }}
+          flavor: |
+            latest=false
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
+            type=edge,branch=main
+            type=sha,prefix=sha-,format=short,enable=${{ github.ref == 'refs/heads/main' }}
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: create the multi-arch manifest
+        working-directory: ${{ runner.temp }}/digests
+        env:
+          IMAGE: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.image }}
+          TAGS: ${{ steps.meta.outputs.tags }}
+        run: |
+          set -eu
+          args=""
+          for t in $TAGS; do args="$args -t $t"; done
+          # shellcheck disable=SC2046,SC2086
+          docker buildx imagetools create $args $(printf "$IMAGE@sha256:%s " *)
+      - name: inspect
+        env:
+          IMAGE: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.image }}
+          VERSION: ${{ steps.meta.outputs.version }}
+        run: docker buildx imagetools inspect "$IMAGE:$VERSION"

@@ -1,0 +1,102 @@
+/* The main page "/" (internal/homeweb). On top of webui common.css. */
+
+/* title and the status line */
+.h-head { margin-bottom: 16px; }
+.h-head h1 { margin: 0; font-size: 24px; line-height: 32px; }
+.h-head p { margin: 4px 0 0; color: var(--text-2); }
+.h-head p b { color: var(--text-strong); font-weight: 600; }
+.pulse { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--text-3); margin-right: 6px; vertical-align: 1px; }
+.pulse.live { background: var(--ok); }
+
+/* headline numbers */
+.hkpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); background: var(--surface); border: 1px solid var(--border); border-radius: 8px; }
+.hkpis.n3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.hkpis.n2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.hkpis.n1 { grid-template-columns: minmax(0, 1fr); }
+.hkpi { padding: 14px 18px 12px; min-width: 0; }
+.hkpi + .hkpi { border-left: 1px solid var(--line); }
+.hkpi .hl { font-size: 13px; color: var(--text-2); display: flex; justify-content: space-between; gap: 8px; min-height: 19px; }
+.hkpi .hl .at { font-size: 12px; color: var(--text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hkpi .val { margin-top: 2px; font-size: 28px; line-height: 34px; font-weight: 600; color: var(--text-strong); letter-spacing: -.02em; white-space: nowrap; }
+.hkpi .sub { margin-top: 2px; color: var(--text-2); font-size: 12px; line-height: 16px; min-height: 16px; }
+.hkpi .sub .bad { color: var(--danger); font-weight: 600; }
+.hkpi .sub a { text-decoration: none; }
+.hkpi .sub a:hover { text-decoration: underline; }
+@media (max-width: 900px) {
+  .hkpis, .hkpis.n3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .hkpi:nth-child(odd) { border-left: 0; }
+  .hkpi:nth-child(n+3) { border-top: 1px solid var(--line); }
+}
+@media (max-width: 640px) {
+  .hkpi { padding: 12px 14px 10px; }
+  .hkpi .val { font-size: 24px; line-height: 30px; }
+}
+
+/* sparkline: one viewBox unit per hour, stretched to the box */
+.spark { display: block; width: 100%; height: 32px; margin-top: 8px; overflow: visible; }
+.spark .area { fill: var(--accent-soft); }
+.spark .ln { fill: none; stroke: var(--bar); stroke-width: 1.5; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+.spark .fl { fill: none; stroke: var(--danger); stroke-width: 5; stroke-linecap: round; vector-effect: non-scaling-stroke; }
+.spark .hit { fill: transparent; }
+.spark .cur { stroke: var(--text-3); stroke-width: 1; stroke-dasharray: 2 2; vector-effect: non-scaling-stroke; visibility: hidden; }
+.spark .dot { fill: none; stroke: var(--bar); stroke-width: 6; stroke-linecap: round; vector-effect: non-scaling-stroke; visibility: hidden; }
+.spark .h:hover .cur, .spark .h:hover .dot { visibility: visible; }
+
+/* proportional bar (impact of the problems, accepted vs dismissed findings) */
+.bar2 { display: block; width: 100%; height: 6px; border-radius: 3px; background: var(--track); margin: 14px 0 10px; }
+.bar2 rect { stroke: var(--surface); stroke-width: 2; vector-effect: non-scaling-stroke; }
+.bar2 .b-breaks, .bar2 .b-dismissed { fill: var(--danger); }
+.bar2 .b-partial { fill: var(--warn); }
+.bar2 .b-none { fill: var(--text-3); }
+.bar2 .b-fixed { fill: var(--ok); }
+
+/* «Требует внимания»: tabs are radio buttons, so they work without JS */
+.panel { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; min-width: 0; margin-top: 16px; }
+.panel-h { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 12px 16px; border-bottom: 1px solid var(--line); }
+.panel-h h2 { margin: 0; font-size: 15px; line-height: 22px; }
+.tabs { display: flex; flex-wrap: wrap; gap: 2px; }
+.tabs label { padding: 6px 10px; border-radius: 6px; font-size: 13px; color: var(--text-2); display: inline-flex; gap: 6px; align-items: center; min-height: 32px; cursor: pointer; }
+.tabs label:hover { background: var(--hover); color: var(--text-strong); }
+.tabs .n { font-size: 12px; color: var(--text-2); font-weight: 500; }
+.tp { display: none; }
+#t-problems:checked ~ .panel-h label[for="t-problems"],
+#t-failed:checked ~ .panel-h label[for="t-failed"],
+#t-postponed:checked ~ .panel-h label[for="t-postponed"] { color: var(--text-strong); font-weight: 600; background: var(--subtle); }
+#t-problems:checked ~ .panel-h label[for="t-problems"] .n,
+#t-failed:checked ~ .panel-h label[for="t-failed"] .n,
+#t-postponed:checked ~ .panel-h label[for="t-postponed"] .n { color: var(--text-strong); }
+#t-problems:focus-visible ~ .panel-h label[for="t-problems"],
+#t-failed:focus-visible ~ .panel-h label[for="t-failed"],
+#t-postponed:focus-visible ~ .panel-h label[for="t-postponed"] { box-shadow: 0 0 0 1px var(--focus-gap), 0 0 0 3px var(--focus); }
+#t-problems:checked ~ .tp-problems, #t-failed:checked ~ .tp-failed, #t-postponed:checked ~ .tp-postponed { display: block; }
+.alist { list-style: none; margin: 0; padding: 0; }
+.alist li + li { border-top: 1px solid var(--line); }
+.arow { display: grid; grid-template-columns: 8px minmax(0, 1fr) auto; gap: 4px 12px; align-items: baseline; padding: 10px 16px; color: var(--text); text-decoration: none; }
+.arow:hover { background: var(--hover); }
+.arow .sev { align-self: center; width: 8px; height: 8px; border-radius: 50%; background: var(--warn); }
+.arow .sev.error { background: var(--danger); }
+.arow .sev.info { background: var(--text-3); }
+.arow .t { color: var(--text-strong); font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.arow .w { color: var(--text-2); font-size: 12px; white-space: nowrap; }
+.arow .d { grid-column: 2 / 4; color: var(--text-2); font-size: 13px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.arow .p { color: var(--text); }
+.empty-ok { padding: 20px 16px; color: var(--text-2); display: flex; gap: 8px; align-items: center; }
+.empty-ok svg { color: var(--ok); flex: none; }
+.empty-ok.err svg { color: var(--danger); }
+.panel-f { padding: 10px 16px; border-top: 1px solid var(--line); font-size: 13px; display: flex; gap: 16px; flex-wrap: wrap; }
+.panel-f a { text-decoration: none; }
+.panel-f a:hover { text-decoration: underline; }
+.panel-f .muted { color: var(--text-2); }
+
+/* section cards */
+.sect-h { font-size: 15px; margin: 24px 0 10px; color: var(--text-strong); }
+.hcards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 230px), 1fr)); gap: 12px; }
+a.tile { display: flex; flex-direction: column; gap: 6px; padding: 14px 16px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text); text-decoration: none; min-width: 0; }
+a.tile:hover { border-color: var(--accent-line); background: var(--accent-soft); }
+a.tile:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+a.tile h3 { margin: 0; font-size: 15px; line-height: 22px; color: var(--text-strong); }
+a.tile p { margin: 0; color: var(--text-2); font-size: 13px; text-wrap: pretty; }
+a.tile .fig { margin-top: auto; padding-top: 6px; display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 13px; color: var(--text-strong); }
+a.tile .fig span { min-width: 0; overflow-wrap: anywhere; }
+a.tile .fig .bad { color: var(--danger); }
+a.tile .fig .muted { color: var(--text-2); }

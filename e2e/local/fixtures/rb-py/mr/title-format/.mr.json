@@ -1,0 +1,7 @@
+{
+  "branch": "fix/promo-case",
+  "title": "Добавил промокоды в нижнем регистре PROJ-1",
+  "scenarios": "I4, I3",
+  "description": "Промокод SUMMER15 и приведение регистра.",
+  "expect": "Jira выключена локально, проверка заголовка работает: подсказка формата `feat: описание (PROJ-1)` (I4). I3 (`require_key_in_title`) — включить в config.yaml и переименовать MR без ключа."
+}

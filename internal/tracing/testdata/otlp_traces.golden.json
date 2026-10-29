@@ -1,0 +1,164 @@
+{
+  "resourceSpans": [
+    {
+      "resource": {
+        "attributes": [
+          {
+            "key": "service.name",
+            "value": {
+              "stringValue": "gitlab-review-bot"
+            }
+          },
+          {
+            "key": "telemetry.sdk.name",
+            "value": {
+              "stringValue": "reviewbot-tracing"
+            }
+          },
+          {
+            "key": "telemetry.sdk.language",
+            "value": {
+              "stringValue": "go"
+            }
+          },
+          {
+            "key": "telemetry.sdk.version",
+            "value": {
+              "stringValue": "1.0.0"
+            }
+          },
+          {
+            "key": "service.version",
+            "value": {
+              "stringValue": "1.2.3"
+            }
+          },
+          {
+            "key": "service.instance.id",
+            "value": {
+              "stringValue": "bot-1"
+            }
+          },
+          {
+            "key": "deployment.environment",
+            "value": {
+              "stringValue": "prod"
+            }
+          },
+          {
+            "key": "deployment.environment.name",
+            "value": {
+              "stringValue": "prod"
+            }
+          }
+        ]
+      },
+      "scopeSpans": [
+        {
+          "scope": {
+            "name": "github.com/fixcik/gitlab-review-bot/internal/tracing",
+            "version": "1.0.0"
+          },
+          "spans": [
+            {
+              "traceId": "4bf92f3577b34da6a3ce929d0e0e4736",
+              "spanId": "00f067aa0ba902b7",
+              "flags": 1,
+              "name": "review.job",
+              "kind": 5,
+              "startTimeUnixNano": "1700000000123456789",
+              "endTimeUnixNano": "1700000090123456789",
+              "attributes": [
+                {
+                  "key": "gitlab.project",
+                  "value": {
+                    "stringValue": "group/app"
+                  }
+                },
+                {
+                  "key": "gitlab.mr.iid",
+                  "value": {
+                    "intValue": "7"
+                  }
+                },
+                {
+                  "key": "job.manual",
+                  "value": {
+                    "boolValue": false
+                  }
+                },
+                {
+                  "key": "reviewbot.claude.cost_usd",
+                  "value": {
+                    "doubleValue": 0.25
+                  }
+                }
+              ],
+              "links": [
+                {
+                  "traceId": "01000000000000000000000000000000",
+                  "spanId": "0200000000000000",
+                  "flags": 1,
+                  "attributes": [
+                    {
+                      "key": "reviewbot.event.source",
+                      "value": {
+                        "stringValue": "webhook"
+                      }
+                    }
+                  ]
+                }
+              ],
+              "status": {
+                "code": 1
+              }
+            },
+            {
+              "traceId": "4bf92f3577b34da6a3ce929d0e0e4736",
+              "spanId": "53995c3f42cd8ad8",
+              "parentSpanId": "00f067aa0ba902b7",
+              "flags": 1,
+              "name": "GET",
+              "kind": 3,
+              "startTimeUnixNano": "1700000001123456789",
+              "endTimeUnixNano": "1700000001623456789",
+              "attributes": [
+                {
+                  "key": "http.request.method",
+                  "value": {
+                    "stringValue": "GET"
+                  }
+                },
+                {
+                  "key": "http.response.status_code",
+                  "value": {
+                    "intValue": "503"
+                  }
+                }
+              ],
+              "droppedAttributesCount": 1,
+              "events": [
+                {
+                  "timeUnixNano": "1700000001523456789",
+                  "name": "exception",
+                  "attributes": [
+                    {
+                      "key": "exception.type",
+                      "value": {
+                        "stringValue": "http_5xx"
+                      }
+                    }
+                  ]
+                }
+              ],
+              "status": {
+                "message": "HTTP 503",
+                "code": 2
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

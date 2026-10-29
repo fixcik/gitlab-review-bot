@@ -1,0 +1,135 @@
+# Local test stand: GitLab CE + GitLab Runner for end-to-end checks of reviewbot.
+#
+#   e2e/local/up.sh      # start, wait, bootstrap users/tokens/runner -> e2e/local/.env.local
+#   e2e/local/seed.sh    # test groups, projects, branches and MRs
+#   e2e/local/down.sh    # stop (--purge: also volumes and .env.local)
+#
+# GitLab is reachable as http://gitlab:8929 everywhere:
+#   - from the host: add "127.0.0.1 gitlab" to /etc/hosts (port 8929 is published);
+#     the setup scripts themselves use http://localhost:8929 and do not need it;
+#   - from containers on the network "reviewbot-local" (the bot in a container,
+#     CI job containers): by the network alias "gitlab".
+#
+# Image: the official gitlab/gitlab-ce tags are multi-arch (linux/amd64 and
+# linux/arm64), so Apple Silicon runs it natively. Set GITLAB_VERSION to the
+# version of the production GitLab; GITLAB_IMAGE overrides the full image
+# reference (another edition or a mirror), e.g.
+#   GITLAB_IMAGE=gitlab/gitlab-ee:18.11.13-ee.0 e2e/local/up.sh
+#
+# Optional tracing backend (profile "tracing"; docs/features/tracing.md):
+#   docker compose -f e2e/local/docker-compose.yml --profile tracing up -d tempo grafana
+# Tempo receives OTLP on :4318 (published for a bot on the host; "tempo:4318"
+# on the network), Grafana with a provisioned Tempo datasource on :3000.
+
+name: reviewbot-local
+
+networks:
+  reviewbot-local:
+    # Fixed name (no compose project prefix): the runner passes it to job
+    # containers (network_mode) and the bot container joins it by name.
+    name: reviewbot-local
+
+volumes:
+  gitlab-config: {}
+  gitlab-logs: {}
+  gitlab-data: {}
+  runner-config: {}
+  tempo-data: {}
+
+services:
+  gitlab:
+    image: ${GITLAB_IMAGE:-gitlab/gitlab-ce:${GITLAB_VERSION:-18.11.13-ce.0}}
+    hostname: gitlab
+    restart: unless-stopped
+    shm_size: 256m
+    ports:
+      - "${GITLAB_PORT:-8929}:8929"
+    environment:
+      # Memory-trimmed single-node GitLab; external_url decides the nginx port.
+      GITLAB_OMNIBUS_CONFIG: |
+        external_url 'http://gitlab:8929'
+        nginx['listen_port'] = 8929
+        nginx['listen_https'] = false
+        letsencrypt['enable'] = false
+        gitlab_rails['gitlab_shell_ssh_port'] = 2224
+        gitlab_rails['usage_ping_enabled'] = false
+        gitlab_rails['gitlab_default_projects_features_container_registry'] = false
+        gitlab_rails['packages_enabled'] = false
+        gitlab_rails['dependency_proxy_enabled'] = false
+        gitlab_rails['env'] = { 'MALLOC_CONF' => 'dirty_decay_ms:1000,muzzy_decay_ms:1000' }
+        puma['worker_processes'] = 0
+        sidekiq['concurrency'] = 5
+        prometheus_monitoring['enable'] = false
+        alertmanager['enable'] = false
+        node_exporter['enable'] = false
+        redis_exporter['enable'] = false
+        postgres_exporter['enable'] = false
+        gitlab_exporter['enable'] = false
+        registry['enable'] = false
+        gitlab_pages['enable'] = false
+        gitlab_kas['enable'] = false
+    extra_hosts:
+      # Webhook mode with the bot on the host: http://host.docker.internal:8080/webhook
+      # (Docker Desktop resolves it by itself; on Linux this line provides it).
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - gitlab-config:/etc/gitlab
+      - gitlab-logs:/var/log/gitlab
+      - gitlab-data:/var/opt/gitlab
+      # Bootstrap script for `gitlab-rails runner` (up.sh); read-only.
+      - ./bootstrap.rb:/opt/reviewbot-local/bootstrap.rb:ro
+    networks:
+      reviewbot-local:
+        aliases: [gitlab]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS -o /dev/null http://localhost:8929/-/health || exit 1"]
+      interval: 20s
+      timeout: 10s
+      retries: 10
+      start_period: 15m
+
+  gitlab-runner:
+    image: gitlab/gitlab-runner:${RUNNER_VERSION:-latest}
+    restart: unless-stopped
+    depends_on: [gitlab]
+    volumes:
+      - runner-config:/etc/gitlab-runner
+      # Docker executor: job containers are started by the host docker daemon
+      # (on macOS Docker Desktop this path works as is).
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      reviewbot-local: {}
+
+  # --- profile "tracing": trace backend for tracing.* (off unless asked) ---
+  tempo:
+    profiles: [tracing]
+    image: grafana/tempo:${TEMPO_VERSION:-3.0.5}
+    command: ["-target=all", "-config.file=/etc/tempo.yaml"]
+    restart: unless-stopped
+    volumes:
+      - ./tracing/tempo.yaml:/etc/tempo.yaml:ro
+      - tempo-data:/var/tempo
+    ports:
+      - "${TEMPO_OTLP_PORT:-4318}:4318" # OTLP/HTTP: the bot on the host exports to http://localhost:4318
+      - "${TEMPO_PORT:-3200}:3200"      # Tempo API (Grafana talks to it on the network)
+    networks:
+      reviewbot-local:
+        aliases: [tempo]
+
+  grafana:
+    profiles: [tracing]
+    image: grafana/grafana:${GRAFANA_VERSION:-13.1.3}
+    restart: unless-stopped
+    depends_on: [tempo]
+    environment:
+      # Local stand only: anonymous admin, no login form.
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
+      GF_AUTH_DISABLE_LOGIN_FORM: "true"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+    volumes:
+      - ./tracing/grafana-datasources.yaml:/etc/grafana/provisioning/datasources/datasources.yaml:ro
+    ports:
+      - "${GRAFANA_PORT:-3000}:3000"
+    networks:
+      reviewbot-local: {}

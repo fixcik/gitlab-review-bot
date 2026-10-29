@@ -1,0 +1,7 @@
+{
+  "branch": "mig/modify-v3-init",
+  "title": "fix: статус cancelled в справочнике",
+  "scenarios": "V12",
+  "description": "Правка уже смерженной `V3__init.sql`.",
+  "expect": "«MODIFIED existing migration» в списке файлов и подсказка `modified_migration` на первой добавленной строке."
+}

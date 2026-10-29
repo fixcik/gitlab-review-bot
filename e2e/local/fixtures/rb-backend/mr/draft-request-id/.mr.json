@@ -1,0 +1,8 @@
+{
+  "branch": "feat/request-id",
+  "title": "feat: заголовок X-Request-ID во всех ответах",
+  "scenarios": "C5",
+  "draft": true,
+  "description": "Middleware, которое прокидывает или генерирует `X-Request-ID`.",
+  "expect": "Draft → ревью нет. Снять Draft (`glab mr update --ready` от rb-dev) → **полное** ревью."
+}

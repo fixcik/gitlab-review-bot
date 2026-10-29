@@ -1,0 +1,7 @@
+{
+  "branch": "chore/drop-order-cancel",
+  "title": "chore: убрать отмену заказа из интерфейса (PROJ-12)",
+  "scenarios": "U14, U15",
+  "description": "Больше не вызываем `DELETE /orders/{id}` (пара к MR `rb-orders-py` `feat/soft-delete-order`, общая стори PROJ-10 в Jira).",
+  "expect": "Локально Jira выключена: связь MR по общей стори не строится — проверка U14/U15 на бою."
+}

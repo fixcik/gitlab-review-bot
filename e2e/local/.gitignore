@@ -1,0 +1,8 @@
+# Secrets and runtime state of the local stand (never commit).
+.env.local
+.env.local.*
+.state/
+data/
+# The root .gitignore ignores config.yaml everywhere; this one is the stand's
+# config without secrets and belongs to the repository.
+!config.yaml

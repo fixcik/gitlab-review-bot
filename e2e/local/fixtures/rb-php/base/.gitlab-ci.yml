@@ -1,0 +1,49 @@
+# PHPUnit with PostgreSQL and Clover coverage (reviewbot: coverage.job/path)
+# and PHPStan in GitLab Code Quality format (reviewbot: lint.ci, artifact).
+stages: [test]
+
+tests:
+  stage: test
+  image: php:8.3-cli
+  services:
+    - name: postgres:16-alpine
+      alias: postgres
+  variables:
+    POSTGRES_DB: orders
+    POSTGRES_USER: orders
+    POSTGRES_PASSWORD: orders
+    DB_HOST: postgres
+    DB_NAME: orders
+    DB_USER: orders
+    DB_PASSWORD: orders
+    COMPOSER_ALLOW_SUPERUSER: "1"
+  before_script:
+    - apt-get update -qq && apt-get install -y -qq --no-install-recommends git unzip libpq-dev $PHPIZE_DEPS >/dev/null
+    - docker-php-ext-install -j"$(nproc)" pdo_pgsql >/dev/null
+    - pecl install pcov >/dev/null && docker-php-ext-enable pcov
+    - curl -sS https://getcomposer.org/installer | php -- --quiet --install-dir=/usr/local/bin --filename=composer
+    - composer install --no-interaction --no-progress
+  script:
+    - mkdir -p build
+    - vendor/bin/phpunit --coverage-clover build/clover.xml
+  artifacts:
+    when: always
+    expire_in: 7 days
+    paths: [build/clover.xml]
+
+phpstan:
+  stage: test
+  image: php:8.3-cli
+  variables:
+    COMPOSER_ALLOW_SUPERUSER: "1"
+  before_script:
+    - apt-get update -qq && apt-get install -y -qq --no-install-recommends git unzip >/dev/null
+    - curl -sS https://getcomposer.org/installer | php -- --quiet --install-dir=/usr/local/bin --filename=composer
+    - composer install --no-interaction --no-progress
+  script:
+    - vendor/bin/phpstan analyse --no-progress --error-format=gitlab > phpstan.json
+  allow_failure: true
+  artifacts:
+    when: always
+    expire_in: 7 days
+    paths: [phpstan.json]

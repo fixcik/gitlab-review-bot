@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<meta name="color-scheme" content="light dark">
+<title>Расход токенов · ревью-бот</title>
+<script nonce="{{NONCE}}">
+try { var t0 = localStorage.getItem("reviewbot-usage-theme"); if (t0 === "light" || t0 === "dark") document.documentElement.setAttribute("data-theme", t0); } catch (e) {}
+(function () { var l = document.createElement("link"); l.rel = "icon"; l.href = "data:image/svg+xml," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><rect width="16" height="16" rx="4" fill="#7b58cf"/><path d="M8 3.5 12 6v4l-4 2.5L4 10V6z" fill="none" stroke="#fff" stroke-width="1.6"/></svg>'); document.head.appendChild(l); })();
+</script>
+<style nonce="{{NONCE}}">
+{{COMMON_CSS}}
+{{USAGE_CSS}}
+</style>
+</head>
+<body>
+{{HEADER}}
+
+<main id="main" aria-busy="true">
+  <div class="head">
+    <div>
+      <h1>Расход токенов</h1>
+      <p class="range" id="range">Загрузка…</p>
+    </div>
+    <div class="tools">
+      <label class="check"><input type="checkbox" id="cmp" checked> Сравнить с предыдущим периодом</label>
+      <button type="button" class="btn icon" id="reload" aria-label="Обновить данные" title="Обновить">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9"/><path d="M12.5 1.75v2.75H9.75"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <div id="bar" aria-label="Фильтры расхода"></div>
+  <p class="note partial" id="partial" hidden></p>
+
+  <div class="banner" id="error" role="alert" hidden>
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 1a7 7 0 1 1 0 14A7 7 0 0 1 8 1Zm0 9.5a1 1 0 1 0 0 2 1 1 0 0 0 0-2ZM8 4a.9.9 0 0 0-.9.95l.2 4.1a.7.7 0 0 0 1.4 0l.2-4.1A.9.9 0 0 0 8 4Z"/></svg>
+    <div>
+      <h2 id="error-title"></h2>
+      <p id="error-text"></p>
+      <div class="act"><button type="button" class="btn sm" id="retry">Повторить</button></div>
+    </div>
+  </div>
+
+
+  <section class="emptystate" id="empty" hidden aria-live="polite">
+    <div class="ico" aria-hidden="true">
+      <svg width="22" height="22" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M2 13.5h12M4 11V8M8 11V4.5M12 11V9.5"/></svg>
+    </div>
+    <h2>За этот период запусков нет</h2>
+    <p id="empty-text">Бот не запускал Claude в выбранном окне.</p>
+    <div class="act" id="empty-act"></div>
+  </section>
+
+
+  <div class="dash" id="dash">
+    <section class="kpis kp5" aria-label="Итоги за период">
+      <div class="kpi">
+        <div class="lbl">Запуски</div>
+        <div class="val" id="k-runs"><span class="sk big"></span></div>
+        <div class="sub" id="k-runs-sub">&nbsp;</div>
+        <div class="delta" id="d-runs"></div>
+      </div>
+      <div class="kpi wide kpi-tok">
+        <div class="lbl">Токены всего</div>
+        <div class="row"><div class="val" id="k-tok"><span class="sk big"></span></div><div class="sub" id="k-tok-sub"></div></div>
+        <div class="split" id="k-split" aria-hidden="true"></div>
+        <ul class="legend" id="k-legend"></ul>
+        <div class="delta" id="d-tok"></div>
+      </div>
+      <div class="kpi">
+        <div class="lbl">Условная стоимость</div>
+        <div class="val" id="k-cost"><span class="sk big"></span></div>
+        <div class="sub">по ценам API; при подписке это оценка, а не счёт</div>
+        <div class="delta" id="d-cost"></div>
+      </div>
+      <div class="kpi">
+        <div class="lbl">Ревью одного MR</div>
+        <div class="val" id="k-mr"><span class="sk big"></span></div>
+        <div class="sub" id="k-mr-sub">&nbsp;</div>
+        <div class="delta" id="d-mr"></div>
+      </div>
+      <div class="kpi">
+        <div class="lbl">В среднем за запуск</div>
+        <div class="val" id="k-avg"><span class="sk big"></span></div>
+        <div class="sub" id="k-avg-sub">&nbsp;</div>
+        <div class="delta" id="d-avg"></div>
+      </div>
+    </section>
+
+    <div class="grid-32 one" id="row-sig">
+      <section class="card" aria-labelledby="h-sig">
+        <div class="card-h">
+          <div class="ttl"><h2 id="h-sig">На что обратить внимание</h2><span class="count" id="n-sig">–</span></div>
+          <p class="hint">клик — показать на странице</p>
+        </div>
+        <div id="signals"></div>
+        <p class="rulesnote" id="rules"></p>
+      </section>
+      <section class="card" id="budget-card" aria-labelledby="h-bud" hidden>
+        <div class="card-h">
+          <div class="ttl"><h2 id="h-bud">Бюджет месяца</h2></div>
+          <p class="hint">все пользователи и репозитории</p>
+        </div>
+        <div class="budget" id="budget"></div>
+      </section>
+    </div>
+
+    <section class="card" aria-labelledby="h-user">
+      <div class="card-h">
+        <div class="ttl"><h2 id="h-user">Кто сколько тратит</h2><span class="count" id="n-user">–</span></div>
+        <p class="hint">клик по строке — фильтр всей страницы</p>
+      </div>
+      <div class="scroll"><table id="t-user"></table></div>
+      <div class="card-f" id="f-user" hidden><button type="button" class="linkbtn" id="more-user"></button></div>
+    </section>
+
+    <section class="card" aria-labelledby="h-day">
+      <div class="card-h">
+        <div class="ttl"><h2 id="h-day">Во времени</h2><p class="hint" id="day-hint"></p></div>
+        <div class="seg" id="metric" role="group" aria-label="Показатель графика">
+          <button type="button" data-m="tokens">Токены</button><button type="button" data-m="cost">Стоимость</button><button type="button" data-m="runs">Запуски</button>
+        </div>
+      </div>
+      <div class="card-b">
+        <p class="summary" id="chart-sum"></p>
+        <p class="ecnote" id="ec-note" hidden>Графики не загрузились, поэтому данные показаны таблицами.</p>
+        <ul class="chart-legend ecbox" id="chart-legend"></ul>
+        <div class="chartwrap ecbox" id="chartwrap" tabindex="0" role="group" aria-roledescription="график" aria-label="Расход во времени. Стрелками влево и вправо можно выбрать интервал.">
+          <div class="ec" id="c-day" aria-hidden="true"></div>
+        </div>
+        <p class="sr" id="chart-live" aria-live="polite"></p>
+      </div>
+      <details class="alt" id="day-alt">
+        <summary>Таблица по интервалам</summary>
+        <div class="scroll"><table id="t-day"></table></div>
+      </details>
+    </section>
+
+    <div class="grid2">
+      <section class="card" aria-labelledby="h-proj">
+        <div class="card-h">
+          <div class="ttl"><h2 id="h-proj">Репозитории</h2><span class="count" id="n-proj">–</span></div>
+          <p class="hint" id="proj-hint">клик — фильтр</p>
+        </div>
+        <div class="scroll"><table id="t-project"></table></div>
+        <div class="card-f" id="f-proj" hidden><button type="button" class="linkbtn" id="more-proj"></button></div>
+      </section>
+      <div class="stack">
+        <section class="card kindcard" aria-labelledby="h-kind">
+          <div class="card-h"><div class="ttl"><h2 id="h-kind">Тип запуска</h2></div><p class="hint">доля стоимости · клик — фильтр</p></div>
+          <div class="viz">
+            <div class="donutbox ecbox">
+              <div class="ec" id="c-kind" aria-hidden="true"></div>
+            </div>
+            <div class="scroll"><table id="t-kind"></table></div>
+          </div>
+          <p class="sr" id="kind-sum"></p>
+        </section>
+        <section class="card" aria-labelledby="h-model">
+          <div class="card-h"><div class="ttl"><h2 id="h-model">Модели</h2></div><p class="hint">с учётом субагентов · клик — фильтр</p></div>
+          <div class="scroll"><table id="t-model"></table></div>
+        </section>
+      </div>
+    </div>
+
+    <section class="card" aria-labelledby="h-mr">
+      <div class="card-h">
+        <div class="ttl"><h2 id="h-mr">Самые дорогие merge request’ы</h2><span class="count" id="n-mr">–</span></div>
+        <p class="hint">клик — фильтр, ссылка — в GitLab</p>
+      </div>
+      <div class="scroll"><table id="t-mr"></table></div>
+      <div class="card-f" id="f-mr" hidden><button type="button" class="linkbtn" id="more-mr"></button></div>
+    </section>
+
+    <p class="foot"><b>Стоимость условная:</b> считается по ценам API (оценка Claude Code); при подписке это оценка, а не счёт.
+    Авторевью после пуша относится на автора MR, команды и вопросы — на того, кто их отправил; «без пользователя» — запуски, которые ни на кого не отнесены.
+    <b>Токены всего</b> = вход + выход + чтение кэша + запись в кэш. Разбивка по моделям учитывает субагентов: один запуск может расходовать токены нескольких моделей.
+    Сравнение — с предыдущим периодом той же длины.</p>
+  </div>
+</main>
+
+<script nonce="{{NONCE}}" src="{{ECHARTS}}"></script>
+<script nonce="{{NONCE}}" src="{{FILTERS}}"></script>
+<script nonce="{{NONCE}}">
+{{COMMON_JS}}
+</script>
+<script nonce="{{NONCE}}" src="{{USAGE_JS}}"></script>
+</body>
+</html>

@@ -1,0 +1,17 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/fixcik/gitlab-review-bot/main/docs/reviewbot.schema.json
+# .reviewbot.yaml: подключает репозиторий к ревью (файл в целевой ветке MR).
+# Пустой файл — настройки по умолчанию. Проверить: reviewbot validate-repo-config .reviewbot.yaml
+# Все ключи: docs/configuration.md, образец: .reviewbot.example.yaml
+
+enabled: true
+auto_review: true
+language: ru
+
+# Что не ревьюить (glob doublestar).
+ignore:
+  - "**/*.pb.go"
+  - "**/mocks/**"
+
+# Правила команды для ревью (необязательно).
+# instructions: |
+#   Обращай внимание на обработку ошибок и закрытие ресурсов.

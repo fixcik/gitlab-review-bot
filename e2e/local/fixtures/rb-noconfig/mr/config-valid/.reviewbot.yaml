@@ -1,0 +1,5 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/fixcik/gitlab-review-bot/main/docs/reviewbot.schema.json
+# reviewbot settings of rb-noconfig: added by the onboarding MR (R9).
+language: ru
+instructions: |
+  Небольшой учебный сервис: пакет internal/greet форматирует приветствия.

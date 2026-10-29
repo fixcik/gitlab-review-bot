@@ -1,0 +1,7 @@
+{
+  "branch": "api/invoice-ref",
+  "title": "feat: обязательный expand и без paid_at в счёте",
+  "scenarios": "J11",
+  "description": "`api/billing.yaml`: параметр `expand` обязателен; схема `api/schemas/invoice.yaml` (через `$ref` на соседний файл) больше не содержит `paid_at`.",
+  "expect": "Проверка oasdiff работает со спецификацией, ссылающейся на `./schemas/invoice.yaml`: найдены обязательный параметр и удалённое поле ответа."
+}

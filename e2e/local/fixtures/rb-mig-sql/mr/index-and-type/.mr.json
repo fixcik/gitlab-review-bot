@@ -1,0 +1,7 @@
+{
+  "branch": "mig/index-and-total-type",
+  "title": "perf: индекс по дате и точность суммы заказа",
+  "scenarios": "V11",
+  "description": "Индекс без CONCURRENTLY и смена типа колонки.",
+  "expect": "Ничего не блокирует: замечания не выше major; если Claude поставил critical (инструкция «ставь critical на любые миграции» в `.reviewbot.yaml` main) — понижено до major. С `review.block_min_severity: major` понижение — до minor."
+}

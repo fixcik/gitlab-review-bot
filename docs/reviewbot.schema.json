@@ -1,0 +1,572 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "additionalProperties": false,
+  "description": "Per-repository settings of the GitLab review bot, read from the MR's target branch. Generated from internal/config (UPDATE_SCHEMA=1 go test ./internal/config -run TestRepoSchemaUpToDate); reference: docs/configuration.md.",
+  "properties": {
+    "auto_review": {
+      "description": "AutoReview=false: no automatic reviews; commands still work.",
+      "type": "boolean"
+    },
+    "big_mr": {
+      "additionalProperties": false,
+      "description": "BigMR: block=true makes a too-big MR merge-blocking here.",
+      "properties": {
+        "block": {
+          "description": "Block=true makes a too-big MR merge-blocking in this repository (false does not turn the service setting off).",
+          "type": "boolean"
+        }
+      },
+      "type": "object"
+    },
+    "ci": {
+      "additionalProperties": false,
+      "description": "CI: enabled=false turns the CI failure digest off for this repository; ignore_jobs adds job globs (see ci.go).",
+      "properties": {
+        "enabled": {
+          "description": "Enabled=false: no digest, no explanation, no main branch notes for this repository (it cannot turn the feature on).",
+          "type": "boolean"
+        },
+        "ignore_jobs": {
+          "description": "IgnoreJobs: job name globs (path.Match, e.g. \"deploy-*\") whose failures are not analysed, added to review.ci.ignore_jobs.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "type": "object"
+    },
+    "compat": {
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "description": "Enabled=false turns the check off for the repository (default true).",
+          "type": "boolean"
+        },
+        "graphql": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "openapi": {
+          "description": "OpenAPI, Proto and GraphQL are extra path globs (doublestar syntax) of spec files, on top of the built-in discovery.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "proto": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "type": "object"
+    },
+    "context": {
+      "additionalProperties": false,
+      "description": "Context controls context repositories for this repo (see context.go).",
+      "properties": {
+        "enabled": {
+          "description": "Enabled=false gives this repository's reviews no context repositories.",
+          "type": "boolean"
+        },
+        "exclude": {
+          "description": "Exclude are doublestar globs of project paths (\"legacy/**\", \"group/huge-monorepo\"), matched case-insensitively.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "related": {
+          "description": "Related are repositories this one works with (its frontend, clients, the services it calls). They are always given to Claude first, beyond review.context.max_repos and regardless of Exclude, may lie outside gitlab.groups (the bot account needs read access), and the prompt marks them with the note.",
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "note": {
+                "description": "Note says how the repositories are related (\"фронтенд, вызывает наш REST API из src/api\").",
+                "type": "string"
+              },
+              "repo": {
+                "description": "Repo is the full project path, e.g. \"frontend/web\".",
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "type": "array"
+        }
+      },
+      "type": "object"
+    },
+    "coverage": {
+      "additionalProperties": false,
+      "description": "Coverage: which CI job artifact holds the coverage report.",
+      "properties": {
+        "job": {
+          "type": "string"
+        },
+        "min": {
+          "description": "Min is the warning threshold in percent of covered changed lines (0 = no warning). Never blocks the merge.",
+          "type": "number"
+        },
+        "path": {
+          "type": "string"
+        },
+        "reports": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "job": {
+                "type": "string"
+              },
+              "path": {
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "type": "array"
+        }
+      },
+      "type": "object"
+    },
+    "description_summary": {
+      "description": "DescriptionSummary=false keeps the bot out of this repo's MR descriptions (it cannot turn review.description_summary on).",
+      "type": "boolean"
+    },
+    "diagram": {
+      "description": "Diagram=false drops the Mermaid diagram from this repo's summaries.",
+      "type": "boolean"
+    },
+    "enabled": {
+      "description": "Enabled=false turns the bot off for the repo (commands still answer).",
+      "type": "boolean"
+    },
+    "ignore": {
+      "description": "Ignore: doublestar globs of files not reviewed (added to the service review.default_ignore).",
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "instructions": {
+      "description": "Instructions: free text for the reviewer about this repository.",
+      "type": "string"
+    },
+    "jira": {
+      "additionalProperties": false,
+      "description": "Jira: per-repository Jira settings.",
+      "properties": {
+        "project_keys": {
+          "description": "ProjectKeys replaces jira.project_keys of the service for this repo, e.g. [\"PROJ\"]. Empty keeps the service value.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "title_language": {
+          "type": "string"
+        },
+        "title_prompt": {
+          "description": "TitlePrompt / TitleLanguage replace jira.title_prompt / jira.title_language of the service for this repository (empty = the service value).",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "labels": {
+      "additionalProperties": false,
+      "description": "Labels: automatic MR labels for this repository (see labels.go).",
+      "properties": {
+        "create_missing": {
+          "type": "boolean"
+        },
+        "enabled": {
+          "description": "Enabled=false turns labels off for the repository (it cannot turn them on when the service switch is off).",
+          "type": "boolean"
+        },
+        "remove_stale": {
+          "type": "boolean"
+        },
+        "rules": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "enabled": {
+                "description": "Enabled=false removes a service rule of the same name in a repository (default true).",
+                "type": "boolean"
+              },
+              "instruction": {
+                "description": "Instruction: when the label applies, in words; the review model decides.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Name is the GitLab label (\"backend\", \"type::bug\").",
+                "type": "string"
+              },
+              "paths": {
+                "description": "Paths: doublestar globs; the label applies when any file changed by the MR matches one of them.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "when_fact": {
+                "anyOf": [
+                  {
+                    "enum": [
+                      "migrations",
+                      "api_changed",
+                      "api_breaking",
+                      "big_mr",
+                      "lint_secret",
+                      "no_tests_changed"
+                    ],
+                    "type": "string"
+                  },
+                  {
+                    "items": {
+                      "enum": [
+                        "migrations",
+                        "api_changed",
+                        "api_breaking",
+                        "big_mr",
+                        "lint_secret",
+                        "no_tests_changed"
+                      ],
+                      "type": "string"
+                    },
+                    "type": "array"
+                  }
+                ],
+                "description": "WhenFact: deterministic facts the bot computes itself (LabelFacts); one name or a list, any of them matches."
+              }
+            },
+            "type": "object"
+          },
+          "type": "array"
+        }
+      },
+      "type": "object"
+    },
+    "language": {
+      "description": "Language of the review (\"ru\", \"en\"); default review.default_language.",
+      "type": "string"
+    },
+    "learn": {
+      "additionalProperties": false,
+      "description": "Learn: enabled=false neither learns from this repo's threads nor applies learned rules in its reviews.",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        }
+      },
+      "type": "object"
+    },
+    "limits": {
+      "additionalProperties": false,
+      "description": "Limits can only make the service limits stricter.",
+      "properties": {
+        "mr_rerun_cooldown": {
+          "description": "Go duration: 90s, 10m, 1h30m.",
+          "pattern": "^(0|([0-9]+(\\.[0-9]+)?(ns|us|µs|ms|s|m|h))+)$",
+          "type": "string"
+        },
+        "user_chat_per_hour": {
+          "type": "integer"
+        },
+        "user_reruns_per_hour": {
+          "type": "integer"
+        }
+      },
+      "type": "object"
+    },
+    "lint": {
+      "additionalProperties": false,
+      "description": "Lint: linters and scanners for this repo (see lint.go).",
+      "properties": {
+        "ci": {
+          "description": "CI are the linter reports of the repository's own CI jobs, read from the MR head pipeline.",
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "artifact": {
+                "description": "Artifact is the report's path inside the job artifacts archive.",
+                "type": "string"
+              },
+              "blocking": {
+                "description": "Blocking: results follow review.block_min_severity instead of never blocking the merge.",
+                "type": "boolean"
+              },
+              "format": {
+                "description": "Format: auto (default) | codeclimate | sarif | checkstyle.",
+                "enum": [
+                  "auto",
+                  "codeclimate",
+                  "sarif",
+                  "checkstyle"
+                ],
+                "type": "string"
+              },
+              "job": {
+                "description": "Job is the job name; a glob (path.Match: *, ?, [..]) is allowed. Parallel instances (\"phpstan 1/2\") match the plain name.",
+                "type": "string"
+              },
+              "report": {
+                "description": "Report: \"codequality\" reads the job's GitLab Code Quality report (artifacts:reports:codequality) instead of an artifact path.",
+                "enum": [
+                  "codequality"
+                ],
+                "type": "string"
+              },
+              "severity": {
+                "description": "Severity for every result; empty = from the report.",
+                "enum": [
+                  "critical",
+                  "major",
+                  "minor",
+                  "nit"
+                ],
+                "type": "string"
+              },
+              "tool": {
+                "description": "Tool is the shown name (ci:<tool>); default: the job name.",
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "disable": {
+          "description": "Disable lists tools not to run for this repository (gitleaks).",
+          "items": {
+            "enum": [
+              "gitleaks"
+            ],
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "enabled": {
+          "description": "Enabled=false turns off everything except gitleaks (which stays on unless review.lint.allow_disable_secrets), CI linters included.",
+          "type": "boolean"
+        }
+      },
+      "type": "object"
+    },
+    "max_files": {
+      "description": "MaxFiles: at most this many files are reviewed (default 200).",
+      "type": "integer"
+    },
+    "max_mr_lines": {
+      "description": "MaxMRLines: a stricter (lower) review.max_mr_lines for this repository; 0 = the service value (see bigmr.go).",
+      "type": "integer"
+    },
+    "mcp": {
+      "additionalProperties": false,
+      "description": "MCP: enabled=false turns the review tools of the MCP server off for this repository (it cannot turn them on).",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        }
+      },
+      "type": "object"
+    },
+    "memory": {
+      "additionalProperties": false,
+      "description": "Memory: enabled=false neither reads nor writes the project memory.",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        }
+      },
+      "type": "object"
+    },
+    "migrations": {
+      "additionalProperties": false,
+      "description": "Migrations: the migration safety check for this repo (see migrations.go).",
+      "properties": {
+        "dialect": {
+          "description": "Dialect replaces review.migrations.dialect for the repository.",
+          "enum": [
+            "postgres",
+            "mysql"
+          ],
+          "type": "string"
+        },
+        "enabled": {
+          "description": "Enabled=false turns the check off for the repository.",
+          "type": "boolean"
+        },
+        "exclude": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "paths": {
+          "description": "Paths and Exclude are added to the service globs.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "type": "object"
+    },
+    "path_instructions": {
+      "description": "PathInstructions: extra instructions for files matching a glob (see paths.go).",
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "instructions": {
+            "description": "free text for the reviewer",
+            "type": "string"
+          },
+          "path": {
+            "description": "doublestar glob, e.g. \"migrations/**\"",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "problems": {
+      "additionalProperties": false,
+      "description": "Problems: summary=false hides the \"could not check\" block (and its mentions) in this repository's summaries (see problems.go).",
+      "properties": {
+        "summary": {
+          "type": "boolean"
+        }
+      },
+      "type": "object"
+    },
+    "reactions": {
+      "additionalProperties": false,
+      "description": "Reactions: enabled=false turns the bot's award emoji off for this repository (it cannot turn them on or change them; see reactions.go).",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        }
+      },
+      "type": "object"
+    },
+    "skills": {
+      "additionalProperties": false,
+      "description": "Skills: which team skills this repo's reviews get (see skills.go).",
+      "properties": {
+        "disable": {
+          "description": "Disable lists skill names not offered in this repository.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "enabled": {
+          "description": "Enabled=false offers no skills in this repository's reviews.",
+          "type": "boolean"
+        }
+      },
+      "type": "object"
+    },
+    "sysmap": {
+      "additionalProperties": false,
+      "description": "Sysmap: files of this repository the system map never scans.",
+      "properties": {
+        "exclude": {
+          "description": "Exclude are doublestar globs of files in this repository that are never scanned (\"legacy/**\", \"src/mocks/**\").",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "type": "object"
+    },
+    "tbd": {
+      "additionalProperties": false,
+      "description": "TBD: thresholds of the trunk-based status block (see tbd.go).",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "feature_flags": {
+          "description": "FeatureFlags=false turns the feature-flag rule off for this repo.",
+          "type": "boolean"
+        },
+        "flags_hint": {
+          "description": "FlagsHint replaces review.tbd.flags_hint for this repo.",
+          "type": "string"
+        },
+        "max_age": {
+          "description": "Go duration: 90s, 10m, 1h30m.",
+          "pattern": "^(0|([0-9]+(\\.[0-9]+)?(ns|us|µs|ms|s|m|h))+)$",
+          "type": "string"
+        },
+        "max_behind": {
+          "type": "integer"
+        },
+        "max_lines": {
+          "type": "integer"
+        }
+      },
+      "type": "object"
+    },
+    "todo": {
+      "additionalProperties": false,
+      "description": "Todo: the TODO-without-task check for this repo (see todo.go).",
+      "properties": {
+        "blocking": {
+          "description": "Blocking=true makes the results blocking (cannot relax the service).",
+          "type": "boolean"
+        },
+        "enabled": {
+          "description": "Enabled=false turns the check off for the repository.",
+          "type": "boolean"
+        },
+        "ignore": {
+          "description": "Ignore globs are added to review.todo.ignore.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "keywords": {
+          "description": "Keywords replace review.todo.keywords.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "severity": {
+          "description": "Severity replaces review.todo.severity.",
+          "enum": [
+            "critical",
+            "major",
+            "minor",
+            "nit"
+          ],
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "verify": {
+      "additionalProperties": false,
+      "description": "Verify: enabled=false turns the verification of findings off for this repository (it cannot turn it on; see verify.go).",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        }
+      },
+      "type": "object"
+    }
+  },
+  "title": ".reviewbot.yaml",
+  "type": "object"
+}

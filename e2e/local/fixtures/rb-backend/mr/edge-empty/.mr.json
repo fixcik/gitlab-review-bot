@@ -1,0 +1,8 @@
+{
+  "branch": "edge/empty",
+  "title": "chore: пустой MR",
+  "scenarios": "C12",
+  "description": "Пустой коммит, изменений нет.",
+  "allow_empty": true,
+  "expect": "Пустой MR (нет изменений) — без падения, понятный ответ."
+}

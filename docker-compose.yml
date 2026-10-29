@@ -1,0 +1,170 @@
+# reviewbot: the bot, its egress proxy and the sandbox network.
+#
+# Quick start (docs/deploy.md): `reviewbot init` writes config.yaml and .env
+# (secrets, mode 600), then
+#
+#   docker compose pull       # images from ghcr.io (REVIEWBOT_IMAGE, REVIEWBOT_SANDBOX_IMAGE)
+#   docker compose up -d      # bot + egress + the internal sandbox network
+#
+# `docker compose build` builds both images locally instead (development).
+# Values come from .env next to this file (see .env.example): compose reads
+# it for the ${...} below, and the bot container gets it as env_file.
+#
+# The bot starts each Claude container with `--network reviewbot-sandbox`
+# and HTTPS_PROXY=http://egress:3128. That network is internal (no route to
+# the outside world); the only way out is the egress proxy, which is attached
+# to both networks and only tunnels CONNECT to allowlisted hosts on :443.
+#
+# MCP tools (review.mcp, on by default; docs/features/mcp.md): the review
+# model calls the bot's MCP endpoint at http://egress:8091/mcp. The egress
+# proxy forwards that ONE port to the bot (REVIEWBOT_MCP_TARGET, default
+# reviewbot:8091; for a bot on the host set
+# REVIEWBOT_MCP_TARGET=host.docker.internal:8091 and bind review.mcp.listen
+# to an address the docker bridge reaches). The bot itself is never attached
+# to the sandbox network, so its public HTTP port stays unreachable from the
+# sandbox; never publish the MCP port (no "ports:" entry for it). If the
+# forward does not reach the bot, each affected review runs once more without
+# MCP and the bot skips MCP for 30 minutes (reviewbot_mcp_fallbacks_total).
+#
+# Both the egress proxy and the bot read the mounted service config
+# (REVIEWBOT_CONFIG, default ./config.yaml as written by `reviewbot init`;
+# ./deploy/config.compose.yaml is the commented template): the proxy takes
+# only sandbox.egress_allow from it.
+#
+# Dev flow (bot on the host): `docker compose up -d egress` and
+# `go run ./cmd/reviewbot serve -config config.yaml`.
+#
+# See docs/security.md for the isolation model and docs/deploy.md for deployment.
+
+name: reviewbot
+
+networks:
+  # Fixed name (no compose project prefix): the bot passes it to `docker run
+  # --network`, see sandbox.network in config.yaml.
+  sandbox:
+    name: reviewbot-sandbox
+    internal: true
+  default: {}
+
+services:
+  egress:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ${REVIEWBOT_IMAGE:-ghcr.io/fixcik/gitlab-review-bot:latest}
+    # The allowlist comes from sandbox.egress_allow of the mounted config
+    # (nothing else is read from it, no secrets are needed).
+    # -mcp-forward: the only path from the sandbox to the bot, one port to one
+    # fixed target, used by review.mcp (on by default).
+    command: ["reviewbot", "egress", "-listen", ":3128", "-config", "/etc/reviewbot/config.yaml",
+              "-mcp-listen", ":8091", "-mcp-forward", "${REVIEWBOT_MCP_TARGET:-reviewbot:8091}"]
+    restart: unless-stopped
+    # Dev flow (bot on the host): lets REVIEWBOT_MCP_TARGET name the host.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      # Long syntax with create_host_path: false: without config.yaml
+      # (`reviewbot init` not run yet) `up` fails with "bind source path
+      # does not exist" instead of docker creating a directory named
+      # config.yaml.
+      - type: bind
+        source: ${REVIEWBOT_CONFIG:-./config.yaml}
+        target: /etc/reviewbot/config.yaml
+        read_only: true
+        bind:
+          create_host_path: false
+    networks:
+      default: {}
+      sandbox:
+        aliases: [egress]
+    # No published ports: only containers on reviewbot-sandbox reach it.
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    pids_limit: 256
+    mem_limit: 256m
+
+  reviewbot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ${REVIEWBOT_IMAGE:-ghcr.io/fixcik/gitlab-review-bot:latest}
+    command: ["reviewbot", "serve", "-config", "/etc/reviewbot/config.yaml"]
+    restart: unless-stopped
+    depends_on: [egress]
+    # On stop the bot drains: no new jobs, running reviews get
+    # queue.shutdown_grace (default 5m) to finish, webhooks are still
+    # accepted and queued. Docker's default 10s would SIGKILL it mid-drain:
+    # keep this longer than queue.shutdown_grace (+ ~15s for the HTTP and
+    # poller shutdown).
+    stop_grace_period: 6m
+    ports:
+      - "8080:8080"
+      # Not 8091: the MCP listener (review.mcp.listen) is reached only by the
+      # egress proxy over the default network.
+    # Secrets come from .env (written by `reviewbot init`, mode 600) or by
+    # NAME from the environment of `docker compose` (no values in this file);
+    # unset ones are simply not passed.
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      - GITLAB_TOKEN
+      - GITLAB_WEBHOOK_SECRET
+      - GITLAB_SERVICE_TOKEN
+      - CLAUDE_CODE_OAUTH_TOKEN
+      - ANTHROPIC_API_KEY
+      - JIRA_URL
+      - JIRA_TOKEN
+      - USAGE_TOKEN
+      - DIAG_TOKEN
+      - METRICS_TOKEN
+      - MAP_TOKEN
+      - LOG_LEVEL
+      # Tracing (tracing.*): standard OTel overrides, all optional.
+      - OTEL_EXPORTER_OTLP_ENDPOINT
+      - OTEL_EXPORTER_OTLP_HEADERS
+      - OTEL_SERVICE_NAME
+    # Access to the docker socket: the bot starts sandbox containers through
+    # the HOST docker daemon. Note this is effectively root on the host for
+    # the bot process (not for the sandbox containers).
+    group_add:
+      - "${DOCKER_GID:-999}"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - type: bind
+        source: ${REVIEWBOT_CONFIG:-./config.yaml}
+        target: /etc/reviewbot/config.yaml
+        read_only: true
+        bind:
+          create_host_path: false
+      # Team skills (review.skills.dir). Read by the bot only; each run gets
+      # a staged copy under data_dir, which is what the sandbox mounts.
+      - ${REVIEWBOT_SKILLS:-./deploy/skills}:/etc/reviewbot/skills:ro
+      # SAME absolute path inside and outside. The bot creates clones under
+      # data_dir and then runs `docker run -v <clone dir>:/work`. That -v path
+      # is resolved by the HOST daemon, not inside this container, so the
+      # path the bot sees must also exist on the host. data_dir in the config
+      # must be the same value as REVIEWBOT_DATA_DIR (`reviewbot init` writes
+      # both), and the directory writable for uid 1000.
+      - ${REVIEWBOT_DATA_DIR:-/var/lib/reviewbot}:${REVIEWBOT_DATA_DIR:-/var/lib/reviewbot}
+    # The bot needs GitLab + Anthropic reachability only for its own API
+    # calls (GitLab REST, git fetch); Claude itself runs in the sandbox.
+    networks:
+      default: {}
+
+  # The sandbox image the bot starts Claude and the checkers from
+  # (sandbox.image in the config = REVIEWBOT_SANDBOX_IMAGE). Listed here only
+  # so that `docker compose pull` / `docker compose build` fetch or build it;
+  # `up` starts it once and it exits at once (no network, no privileges).
+  sandbox-image:
+    build:
+      context: .
+      dockerfile: Dockerfile.sandbox
+    image: ${REVIEWBOT_SANDBOX_IMAGE:-ghcr.io/fixcik/gitlab-review-bot-sandbox:latest}
+    command: ["true"]
+    restart: "no"
+    network_mode: none
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]

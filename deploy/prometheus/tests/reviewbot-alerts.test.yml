@@ -1,0 +1,131 @@
+# Unit tests of reviewbot-alerts.yml: promtool test rules tests/reviewbot-alerts.test.yml
+# (run from deploy/prometheus; deploy/assets_test.go runs it when promtool is installed).
+rule_files:
+  - ../reviewbot-alerts.yml
+
+evaluation_interval: 1m
+
+tests:
+  # Ready jobs, nothing running: stuck.
+  - interval: 1m
+    input_series:
+      - series: 'reviewbot_queue_jobs{job="reviewbot",instance="bot:8080",state="pending"}'
+        values: '2x30'
+      - series: 'reviewbot_queue_jobs{job="reviewbot",instance="bot:8080",state="running"}'
+        values: '0x30'
+      - series: 'reviewbot_queue_jobs{job="reviewbot",instance="bot:8080",state="retry_wait"}'
+        values: '0x30'
+      - series: 'reviewbot_queue_draining{job="reviewbot",instance="bot:8080"}'
+        values: '0x30'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: ReviewbotQueueStuck
+        exp_alerts: []
+      - eval_time: 20m
+        alertname: ReviewbotQueueStuck
+        exp_alerts:
+          - exp_labels: {instance: "bot:8080", severity: warning}
+            exp_annotations:
+              summary: "reviewbot: 2 готовых задач не запускаются 15 минут"
+              description: "Задачи готовы к запуску, но ни одна не выполняется — воркеры зависли. Отложенные задачи (retry_wait) сюда не входят. Последние задачи и где они встали — /runs. Очередь устойчивая (SQLite): рестарт не теряет задачи — невыполненные запустятся снова после старта."
+
+  # Jobs waiting for their time (refresh_status chain, Claude limit) are not stuck.
+  - interval: 1m
+    input_series:
+      - series: 'reviewbot_queue_jobs{job="reviewbot",instance="bot:8080",state="pending"}'
+        values: '0x60'
+      - series: 'reviewbot_queue_jobs{job="reviewbot",instance="bot:8080",state="running"}'
+        values: '0x60'
+      - series: 'reviewbot_queue_jobs{job="reviewbot",instance="bot:8080",state="retry_wait"}'
+        values: '4x60'
+      - series: 'reviewbot_queue_draining{job="reviewbot",instance="bot:8080"}'
+        values: '0x60'
+    alert_rule_test:
+      - eval_time: 60m
+        alertname: ReviewbotQueueStuck
+        exp_alerts: []
+
+  # Draining on shutdown: nothing new starts on purpose.
+  - interval: 1m
+    input_series:
+      - series: 'reviewbot_queue_jobs{job="reviewbot",instance="bot:8080",state="pending"}'
+        values: '3x30'
+      - series: 'reviewbot_queue_jobs{job="reviewbot",instance="bot:8080",state="running"}'
+        values: '0x30'
+      - series: 'reviewbot_queue_draining{job="reviewbot",instance="bot:8080"}'
+        values: '1x30'
+    alert_rule_test:
+      - eval_time: 25m
+        alertname: ReviewbotQueueStuck
+        exp_alerts: []
+
+  # poll_interval 10m: rounds every 10m are healthy; failures alert after 3 intervals.
+  - interval: 1m
+    input_series:
+      - series: 'reviewbot_poll_interval_seconds{job="reviewbot",instance="bot:8080"}'
+        values: '600x120'
+      # Rounds at 0, 10m, ..., 120m (the gauge holds the time of the last round).
+      - series: 'reviewbot_poll_last_round_timestamp_seconds{job="reviewbot",instance="bot:8080"}'
+        values: '0x9 600x9 1200x9 1800x9 2400x9 3000x9 3600x9 4200x9 4800x9 5400x9 6000x9 6600x9 7200'
+      # Successful rounds up to 10m, then every round fails.
+      - series: 'reviewbot_poll_last_success_timestamp_seconds{job="reviewbot",instance="bot:8080"}'
+        values: '0x9 600x110'
+    alert_rule_test:
+      - eval_time: 9m
+        alertname: ReviewbotPollingFailing
+        exp_alerts: []
+      - eval_time: 35m
+        alertname: ReviewbotPollingFailing
+        exp_alerts: []
+      - eval_time: 41m
+        alertname: ReviewbotPollingFailing
+        exp_alerts:
+          - exp_labels: {instance: "bot:8080", severity: warning}
+            exp_annotations:
+              summary: "reviewbot: опрос GitLab без успешных раундов 31m 0s"
+              description: "Нет успешного раунда опроса дольше max(3 × gitlab.poll_interval, 5 минут): хотя бы одна группа из gitlab.groups не опрашивается. Лог: poller: poll failed; доступ токена к группам; /readyz."
+      - eval_time: 115m
+        alertname: ReviewbotPollerStalled
+        exp_alerts: []
+
+  # poll_interval 10m: rounds stop after 20m -> stalled after 3 intervals + for 5m.
+  - interval: 1m
+    input_series:
+      - series: 'reviewbot_poll_interval_seconds{job="reviewbot",instance="bot:8080"}'
+        values: '600x90'
+      - series: 'reviewbot_poll_last_round_timestamp_seconds{job="reviewbot",instance="bot:8080"}'
+        values: '0x9 600x9 1200x70'
+      - series: 'reviewbot_poll_last_success_timestamp_seconds{job="reviewbot",instance="bot:8080"}'
+        values: '0x9 600x9 1200x70'
+    alert_rule_test:
+      - eval_time: 54m
+        alertname: ReviewbotPollerStalled
+        exp_alerts: []
+      - eval_time: 57m
+        alertname: ReviewbotPollerStalled
+        exp_alerts:
+          - exp_labels: {instance: "bot:8080", severity: warning}
+            exp_annotations:
+              summary: "reviewbot: опрос GitLab не выполняется 37m 0s"
+              description: "Ни одного раунда опроса (ни ok, ни error) дольше max(3 × gitlab.poll_interval, 10 минут): новые MR и команды не замечаются. Лог: poller; при зависании — рестарт."
+
+  # Default poll_interval 30s: the 5 / 10 minute floors apply.
+  - interval: 1m
+    input_series:
+      - series: 'reviewbot_poll_interval_seconds{job="reviewbot",instance="bot:8080"}'
+        values: '30x30'
+      - series: 'reviewbot_poll_last_round_timestamp_seconds{job="reviewbot",instance="bot:8080"}'
+        values: '60+60x30'
+      - series: 'reviewbot_poll_last_success_timestamp_seconds{job="reviewbot",instance="bot:8080"}'
+        values: '60+60x2 180x27'
+    alert_rule_test:
+      - eval_time: 7m
+        alertname: ReviewbotPollingFailing
+        exp_alerts: []
+      - eval_time: 9m
+        alertname: ReviewbotPollingFailing
+        exp_alerts:
+          - exp_labels: {instance: "bot:8080", severity: warning}
+            exp_annotations:
+              summary: "reviewbot: опрос GitLab без успешных раундов 6m 0s"
+              description: "Нет успешного раунда опроса дольше max(3 × gitlab.poll_interval, 5 минут): хотя бы одна группа из gitlab.groups не опрашивается. Лог: poller: poll failed; доступ токена к группам; /readyz."

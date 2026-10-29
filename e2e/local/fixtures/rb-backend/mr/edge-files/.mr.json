@@ -1,0 +1,12 @@
+{
+  "branch": "edge/binary-latin1-nonewline",
+  "title": "chore: логотип, старый шаблон письма и список стоп-слов",
+  "scenarios": "C9",
+  "description": "Бинарный файл, файл в Latin-1 (не UTF-8) и файл без перевода строки в конце.",
+  "generate": [
+    {"kind": "random_binary", "path": "assets/logo.bin", "bytes": 2048},
+    {"kind": "latin1", "path": "templates/welcome-legacy.txt", "text": "Bienvenue, chère cliente ! Votre compte a été créé."},
+    {"kind": "no_newline", "path": "config/stopwords.txt", "text": "admin\nroot\nsupport"}
+  ],
+  "expect": "Ревью без падения; бинарный файл пропущен, не-UTF-8 файл и файл без перевода строки в конце обработаны (позиции замечаний корректны)."
+}

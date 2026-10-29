@@ -1,0 +1,7 @@
+{
+  "branch": "feat/volume-discount",
+  "title": "feat: скидка за объём заказа",
+  "scenarios": "T2, T3, T4",
+  "description": "`VolumeDiscount` с тестом только на часть порогов.",
+  "expect": "После пайплайна (PHPUnit + Postgres, `--coverage-clover build/clover.xml`): блок «🧪» с процентом по Clover, абсолютные пути раннера сопоставлены (T2). T4: переименовать джобу / удалить артефакт — понятное «⚠️»."
+}

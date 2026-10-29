@@ -1,0 +1,3 @@
+# Settlement schedule (internal).
+schedule: daily
+cutoff: "23:00"

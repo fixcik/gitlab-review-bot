@@ -1,0 +1,139 @@
+# reviewbot config for the LOCAL test stand (e2e/local).
+# No secrets here: they come from the environment (e2e/local/.env.local from up.sh,
+# plus CLAUDE_CODE_OAUTH_TOKEN or ANTHROPIC_API_KEY from your own .env).
+#
+# Bot on the host (paths are relative to the repository root):
+#   sudo sh -c 'echo "127.0.0.1 gitlab" >> /etc/hosts'
+#   e2e/local/run-bot.sh            # = go run ./cmd/reviewbot serve -config e2e/local/config.yaml
+# Bot in a container joined to the "reviewbot-local" network:
+#   e2e/local/run-bot.sh --container
+#
+# Checked by TestLocalStandConfigs (internal/config): keep it loadable.
+
+listen: ":8080"
+data_dir: "./e2e/local/data"          # git-ignored; run-bot.sh --container uses an absolute copy
+
+gitlab:
+  url: "http://gitlab:8929"           # GITLAB_URL from .env.local has the same value
+  groups: ["reviewbot-sandbox"]
+  # B12: not reviewed, still context for other reviews. A dedicated project is used so that rb-py keeps T1/E7/H2.
+  exclude: ["reviewbot-sandbox/rb-excluded"]
+  main_branch: ""                     # L8: set "release" (only rb-backend and rb-frontend have it)
+
+  # First pass: polling (GitLab does not need to reach the bot). Production
+  # recommendation is "both" (polling catches up the webhooks of a downtime).
+  events: "poll"
+  poll_interval: "5s"
+  # Webhook pass (B8-B11): events "webhook" or "both", and
+  #   webhook_url: "http://host.docker.internal:8080/webhook"   # bot on the host
+  #   webhook_url: "http://reviewbot:8080/webhook"              # bot container on reviewbot-local
+  # then `go run ./cmd/reviewbot sync-hooks -config e2e/local/config.yaml` (A6) or
+  # sync_hooks: true. up.sh already allows webhooks to local addresses.
+  sync_hooks: false
+  hook_ssl_verify: false              # plain http on the stand
+
+claude:
+  model: "sonnet"
+  advisor_model: "opus"
+  search_model: "haiku"
+  light_model: "haiku"
+  timeout: "15m"
+
+sandbox:
+  mode: "docker"
+  image: "reviewbot-sandbox:latest"
+  network: "reviewbot-sandbox"
+  egress_proxy: "http://egress:3128"
+  egress_allow:
+    - api.anthropic.com
+    - statsig.anthropic.com
+    - claude.ai
+    - console.anthropic.com
+  cpus: "2"
+  memory: "4g"
+
+review:
+  require_repo_config: true           # opt-in (the default): rb-noconfig is not reviewed (R6-R9)
+  debounce: "30s"                     # shorter than prod (90s) to keep the session moving
+  default_language: "ru"
+  block_min_severity: "critical"
+  assign_reviewer: true
+  compat_check: true
+  diagram: true
+  lint:
+    enabled: true
+    allow_disable_secrets: false
+  skills:
+    dir: "./e2e/local/skills"         # go-errors, pg-migrations, broken-skill (M1-M3)
+  context:
+    enabled: true
+    refresh_interval: "2m"            # L7 without waiting 10 minutes
+    max_repos: 50                     # L6: set 2
+    max_repo_mb: 10                   # rb-big (seed.sh, RB_BIG_MB=24) is skipped (L3)
+    exclude: []                       # L2: ["reviewbot-sandbox/rb-consumer"]
+  labels:                             # section AB (docs/features/labels.md)
+    enabled: true
+  sysmap:
+    enabled: true
+    max_runs_per_hour: 30             # first scan of ~15 small repositories
+    refresh_interval: "2m"
+    hints:                            # U4
+      ORDERS_URL: reviewbot-sandbox/rb-orders-py
+    deps: true
+    deps_max_runs_per_hour: 60
+  ci:                                 # section AC (docs/features/ci.md)
+    notify_main: ["root"]             # who is pinged when main breaks
+  mcp:                                # section X (docs/features/mcp.md); on by default
+    enabled: true                     # host mode: run-bot.sh points the egress forward at host.docker.internal:8091
+    listen: ":8091"                   # container mode: egress -> reviewbot:8091 (default REVIEWBOT_MCP_TARGET)
+  # review.migrations is deliberately not set: section V runs with the defaults.
+  # Coverage jobs and paths are per repository (.reviewbot.yaml of rb-py and rb-php);
+  # context.related lives in .reviewbot.yaml of rb-backend and rb-consumer.
+
+limits:
+  global_runs_per_hour: 100
+  user_reruns_per_hour: 10
+  user_chat_per_hour: 30
+  mr_rerun_cooldown: "2m"
+  max_concurrent: 2
+  exempt_users: ["rb-dev"]            # the pass runs many reruns as rb-dev (F12 uses a copy of this config)
+
+usage:
+  enabled: true                       # USAGE_TOKEN / DIAG_TOKEN / MAP_TOKEN / METRICS_TOKEN: optional env
+diag:
+  enabled: true
+metrics:
+  enabled: true
+
+# Queue (P4, P9-P13): Ctrl-C / docker stop lets running jobs finish for
+# up to shutdown_grace (a second Ctrl-C cancels them); every queued job is
+# restored after the restart. compose.bot.yml sets stop_grace_period: 3m.
+queue:
+  shutdown_grace: "2m"
+  manual_max_age: "6h"
+
+# Jira is OFF on the stand (section I and Jira parts of U14/U15 are checked on prod).
+# The title check still works without Jira (I3/I4).
+jira:
+  url: ""
+  project_keys: ["PROJ"]
+  title_check: true
+  require_key_in_title: false         # I3: set true and drop the key from an MR title
+
+# Tracing (docs/features/tracing.md). Off by default: start
+# the backend with
+#   docker compose -f e2e/local/docker-compose.yml --profile tracing up -d tempo grafana
+# and set enabled: true. The endpoint is for the bot on the host; the bot
+# container (run-bot.sh --container) reaches Tempo as http://tempo:4318:
+#   OTEL_EXPORTER_OTLP_ENDPOINT=http://tempo:4318 e2e/local/run-bot.sh --container
+tracing:
+  enabled: false
+  endpoint: "http://localhost:4318"
+  service_name: "gitlab-review-bot"
+  environment: "local"
+  sample_ratio: 1                     # AD8: 0.5 and count traces per review
+  timeout: "5s"
+  # /runs/<id> links the trace to Grafana Explore (datasource uid "tempo").
+  ui_url: "http://localhost:3000/explore?schemaVersion=1&orgId=1&panes=%7B%22a%22%3A%7B%22datasource%22%3A%22tempo%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22datasource%22%3A%7B%22type%22%3A%22tempo%22%2C%22uid%22%3A%22tempo%22%7D%2C%22queryType%22%3A%22traceql%22%2C%22limit%22%3A20%2C%22query%22%3A%22{trace_id}%22%7D%5D%2C%22range%22%3A%7B%22from%22%3A%22now-24h%22%2C%22to%22%3A%22now%22%7D%7D%7D"
+  claude_cli: false                   # AD10 (experimental): the sandbox exports Claude Code spans too;
+  # claude_cli_endpoint: "http://tempo:4318"   # Tempo must then be on the sandbox network (see the feature doc)

@@ -1,0 +1,271 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Знания бота · ревью-бот</title>
+<script nonce="{{.Nonce}}">
+document.documentElement.classList.add("js");
+try { var t0 = localStorage.getItem("reviewbot-usage-theme"); if (t0 === "light" || t0 === "dark") document.documentElement.setAttribute("data-theme", t0); } catch (e) {}
+(function () { var l = document.createElement("link"); l.rel = "icon"; l.href = "data:image/svg+xml," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><rect width="16" height="16" rx="4" fill="#7b58cf"/><path d="M8 3.5 12 6v4l-4 2.5L4 10V6z" fill="none" stroke="#fff" stroke-width="1.6"/></svg>'); document.head.appendChild(l); })();
+</script>
+<style nonce="{{.Nonce}}">
+{{.CommonCSS}}
+</style>
+</head>
+<body>
+{{.Header}}
+
+<main id="main" class="kn">
+  <div class="k-head">
+    <h1>Знания бота</h1>
+    <form class="filters" method="get" action="/knowledge" role="search" aria-label="Фильтры" data-review-filters>
+      <label>Проект
+        <select name="project" data-label="Проект" data-type="search-select">
+          <option value="">все</option>
+          {{range .Projects}}<option value="{{.Value}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>{{end}}
+        </select>
+      </label>
+      <label>Период
+        <select name="period" data-label="Период" data-default="30">
+          {{range .Periods}}<option value="{{.Value}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>{{end}}
+        </select>
+      </label>
+      {{if .KB}}<input type="hidden" name="kb" value="{{.KB}}">{{end}}
+      {{if .Outcome}}<input type="hidden" name="outcome" value="{{.Outcome}}">{{end}}
+      <button type="submit" class="btn sm" data-rf-fallback>Применить</button>
+    </form>
+  </div>
+
+  {{if .Error}}<div class="banner" role="alert"><div><h2>Ошибка</h2><p>{{.Error}}</p></div></div>{{end}}
+
+  <div class="k-top">
+    <section class="card" aria-labelledby="h-prec">
+      <div class="card-h">
+        <div class="ttl"><h2 id="h-prec">Точность по мере решений</h2></div>
+        <p class="hint">накопленная, замечания за {{.Period}}</p>
+      </div>
+      <div class="k-pnl">
+        <div class="k-big">
+          <b>{{if .Precision}}{{.Precision}}{{else}}—{{end}}</b>
+          <span>{{if .Decided}}принято {{.Fixed}} из {{.Decided}} решений{{else}}решений команды пока нет{{end}}</span>
+          {{if .Low}}<span class="lown">мало решений ({{.Decided}} &lt; {{.LowLimit}}) — доверять осторожно</span>{{end}}
+        </div>
+        {{if .Series}}
+        <div class="k-chart" data-chart aria-describedby="chart-desc"></div>
+        <script type="application/json" id="k-series">{{.Series}}</script>
+        <p class="k-sub" id="chart-desc">Каждая точка — решение команды по замечанию (принято или отклонено) в порядке времени; высота — точность после него.{{if .SeriesTrunc}} На графике первые {{.SeriesMax}} решений периода, итог выше — по всем.{{end}}</p>
+        {{else}}
+        <p class="empty">За {{.Period}} команда ещё не принимала решений по замечаниям бота.</p>
+        {{end}}
+      </div>
+    </section>
+
+    <section class="card" aria-labelledby="h-dist">
+      <div class="card-h">
+        <div class="ttl"><h2 id="h-dist">Куда делись замечания</h2><span class="count">{{.DistTotal}}</span></div>
+        <p class="hint">за {{.Period}}</p>
+      </div>
+      <div class="k-pnl">
+        <ul class="k-dist">
+          {{range .Dist}}<li>
+            <span class="st"><i class="c-{{.Status}}"></i>{{.Label}}</span>
+            <span class="v">{{.Count}}</span>
+            <svg class="k-track" viewBox="0 0 100 6" preserveAspectRatio="none" aria-hidden="true"><rect class="bg" width="100" height="6"/>{{if .Width}}<rect class="c-{{.Status}}" width="{{.Width}}" height="6"/>{{end}}</svg>
+            {{if .Why}}<span class="why">{{.Why}}</span>{{end}}
+          </li>{{end}}
+        </ul>
+      </div>
+    </section>
+  </div>
+
+  <section class="card" id="decisions" aria-labelledby="h-dec">
+    <div class="card-h">
+      <div class="ttl"><h2 id="h-dec">Решения по замечаниям</h2><span class="count">{{.DecTotal}}</span></div>
+      <nav class="seg sm" aria-label="Исход">
+        {{range .Outcomes}}<a href="{{.Href}}"{{if .Current}} aria-current="true"{{end}}>{{.Label}} <span class="n">{{.Count}}</span></a>{{end}}
+      </nav>
+    </div>
+    {{if .Decisions}}
+    <div class="scroll"><table class="k-tbl k-dec">
+      <thead><tr><th scope="col">Когда</th><th scope="col">Исход</th><th scope="col">Замечание</th><th scope="col">Проект · MR</th><th scope="col">Файл</th><th scope="col">Правило</th></tr></thead>
+      {{range .Decisions}}
+      <tbody class="d">
+      <tr class="r">
+        <td class="tw">{{.When}}</td>
+        <td><span class="st"><i class="c-{{.Status}}"></i>{{.StatusLabel}}</span></td>
+        <td class="ftitle">
+          <button type="button" class="k-fx js-only" aria-expanded="false" aria-controls="fx-{{.ID}}" data-fx><svg class="chev" width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 3 5 5-5 5"/></svg><span class="sr">Показать текст</span></button>
+          {{if .Severity}}<span class="sev sev-{{.Severity}}">{{.Severity}}</span> {{end}}<span class="t">{{.Title}}</span>
+        </td>
+        <td class="pm"><span class="pname">{{.Project}}</span> {{if .MRURL}}<a class="navlink" href="{{.MRURL}}" rel="noopener noreferrer" target="_blank">{{.MR}}</a>{{else}}{{.MR}}{{end}}</td>
+        <td class="fpath">{{if .File}}{{.File}}{{else}}—{{end}}</td>
+        <td class="tw">{{if .RuleHref}}<a class="navlink" href="{{.RuleHref}}">#{{.RuleID}}{{if .RuleDeleted}} (удалено){{end}}</a>{{else if .RuleID}}#{{.RuleID}}{{else}}<span class="muted">—</span>{{end}}</td>
+      </tr>
+      <tr class="ex" id="fx-{{.ID}}">
+        <td></td>
+        <td colspan="5">
+          <div class="excerpt">{{if .Excerpt}}{{range .Excerpt}}{{if .Code}}<code>{{.Text}}</code>{{else}}{{.Text}}{{end}}{{end}}{{else}}<span class="muted">Текст замечания не сохранён.</span>{{end}}</div>
+          {{if .RuleText}}<p class="km">После отклонения бот запомнил{{if .RuleDeleted}} (правило удалено){{end}}: «{{.RuleText}}»</p>{{end}}
+        </td>
+      </tr>
+      </tbody>
+      {{end}}
+    </table></div>
+    <div class="card-f k-pager">
+      <span>{{.DecFrom}}–{{.DecTo}} из {{.DecTotal}}</span>
+      {{if .PrevHref}}<a class="btn sm" href="{{.PrevHref}}">← предыдущие</a>{{end}}
+      {{if .MoreHref}}<a class="btn sm" href="{{.MoreHref}}">Показать ещё</a>{{end}}
+    </div>
+    {{else}}
+    <p class="empty">Нет решений{{if .OutcomeLabel}} «{{.OutcomeLabel}}»{{end}} по замечаниям за {{.Period}}.</p>
+    {{end}}
+  </section>
+
+  <section class="card" id="kb" aria-labelledby="h-kb">
+    <div class="card-h">
+      <div class="ttl"><h2 id="h-kb">База знаний</h2></div>
+      <nav class="seg sm" aria-label="Тип">
+        {{range .KBTabs}}<a href="{{.Href}}"{{if .Current}} aria-current="true"{{end}}>{{.Label}} <span class="n">{{.Count}}{{if and $.KBTruncated (eq .Label "правила")}}+{{end}}</span></a>{{end}}
+      </nav>
+    </div>
+    {{with .Banner}}<div class="notice{{if .Warn}} warn{{end}}" role="status">
+      <span>{{.Text}}</span>
+      {{if .Undo}}<form class="inline" method="post" action="/knowledge/rule/restore">
+        {{range .Undo}}<input type="hidden" name="id" value="{{.}}">{{end}}
+        <input type="hidden" name="csrf" value="{{$.CSRF}}">
+        <input type="hidden" name="back" value="{{$.Back}}">
+        <button type="submit" class="linkbtn">Вернуть</button>
+      </form>{{end}}
+    </div>{{end}}
+    <p class="k-intro">{{if eq .KB "deleted"}}Удалённые правила бот не учитывает. Их можно вернуть, если такого же правила нет среди действующих.{{else}}Правила бот учитывает в каждом ревью: общие — во всех проектах, остальные — только в своём. Память — что бот узнал о сборке, тестах и устройстве репозитория.{{end}}</p>
+    {{if .HasRules}}<div class="k-bulk" data-bulk data-max="{{.MaxBulk}}">
+      <b data-bulk-n>Отметьте правила, чтобы изменить несколько сразу (не больше {{.MaxBulk}}).</b>
+      <form id="kb-bulk" class="inline" method="post" action="/knowledge/rule/delete">
+        <input type="hidden" name="csrf" value="{{.CSRF}}">
+        <input type="hidden" name="back" value="{{.Back}}">
+        {{if eq .KB "deleted"}}<button type="submit" class="btn sm primary" formaction="/knowledge/rule/restore" data-bulk-btn>Вернуть выбранные</button>
+        {{else}}<button type="submit" class="btn sm" formaction="/knowledge/rule/scope" name="scope" value="global" data-bulk-btn>Сделать общими</button>
+        <button type="submit" class="btn sm" formaction="/knowledge/rule/scope" name="scope" value="project" data-bulk-btn data-needs-project>Только для своих проектов</button>
+        <button type="submit" class="btn sm danger" formaction="/knowledge/rule/delete" data-bulk-btn>Удалить выбранные</button>{{end}}
+      </form>
+      <button type="button" class="linkbtn js-only" data-bulk-clear>Снять выбор</button>
+    </div>{{end}}
+    {{if .KBRows}}
+    <div class="scroll"><table class="k-tbl k-kb">
+      <thead><tr>
+        <th class="c-sel" scope="col"><span class="sr">Выбор</span>{{if .HasRules}}<label class="chk js-only"><input type="checkbox" data-select-all aria-label="Выбрать все правила"></label>{{end}}</th>
+        <th scope="col">Тип</th><th scope="col">Знание</th><th scope="col">Где действует</th><th scope="col">Источник</th><th scope="col">{{if eq .KB "deleted"}}Удалено{{else}}Обновлено{{end}}</th><th scope="col"><span class="sr">Действия</span></th>
+      </tr></thead>
+      <tbody>
+      {{range .KBRows}}
+      {{if .Memory}}
+      <tr class="mem">
+        <td class="c-sel"></td>
+        <td class="tw">память</td>
+        <td class="ktxt"><div class="sub">{{.Title}}</div><ul>{{range .Bullets}}<li>{{.}}</li>{{end}}</ul></td>
+        <td><span class="pname">{{.Project}}</span></td>
+        <td class="src">{{if .Source}}{{.Source}}{{else}}—{{end}}</td>
+        <td class="tw">{{.Updated}}</td>
+        <td></td>
+      </tr>
+      {{else}}
+      <tr class="rule{{if .Deleted}} gone{{end}}{{if .Highlight}} hl{{end}}" id="rule-{{.ID}}">
+        <td class="c-sel"><label class="chk"><input type="checkbox" name="id" value="{{.ID}}" form="kb-bulk"{{if .NoProject}} data-noproj{{end}} aria-label="Выбрать правило #{{.ID}}"></label></td>
+        <td class="tw">правило #{{.ID}}</td>
+        <td class="ktxt">{{.Text}}</td>
+        <td>{{if .Global}}<span class="badge b-running">везде</span>{{if .Project}}<div class="from">пришло из <span class="pname">{{.Project}}</span></div>{{end}}{{else}}<span class="badge b-skipped">проект</span><div><span class="pname">{{.Project}}</span></div>{{end}}</td>
+        <td class="src">{{if .Author}}@{{.Author}}{{else}}—{{end}}{{if .SourceURL}} <a class="navlink" href="{{.SourceURL}}" rel="noopener noreferrer" target="_blank">ответ в треде</a>{{end}}<span class="when">создано {{.Created}}</span></td>
+        <td class="tw">{{if .Deleted}}{{.Deleted}}{{else}}{{.Updated}}{{end}}</td>
+        <td class="acts"><div class="row">
+          {{if .Deleted}}<form class="inline" method="post" action="/knowledge/rule/restore">
+            <input type="hidden" name="id" value="{{.ID}}">
+            <input type="hidden" name="csrf" value="{{$.CSRF}}"><input type="hidden" name="back" value="{{$.Back}}">
+            <button type="submit" class="btn sm">Вернуть</button></form>
+          {{else}}
+          {{if .CanLimit}}<form class="inline" method="post" action="/knowledge/rule/scope">
+            <input type="hidden" name="id" value="{{.ID}}"><input type="hidden" name="scope" value="project">
+            <input type="hidden" name="csrf" value="{{$.CSRF}}"><input type="hidden" name="back" value="{{$.Back}}">
+            <button type="submit" class="btn sm">Только для проекта</button></form>{{end}}
+          {{if not .Global}}<form class="inline" method="post" action="/knowledge/rule/scope">
+            <input type="hidden" name="id" value="{{.ID}}"><input type="hidden" name="scope" value="global">
+            <input type="hidden" name="csrf" value="{{$.CSRF}}"><input type="hidden" name="back" value="{{$.Back}}">
+            <button type="submit" class="btn sm">Сделать общим</button></form>{{end}}
+          <details class="confirm"><summary class="btn sm ghost">Удалить</summary>
+            <form class="inline" method="post" action="/knowledge/rule/delete">
+              <input type="hidden" name="id" value="{{.ID}}">
+              <input type="hidden" name="csrf" value="{{$.CSRF}}"><input type="hidden" name="back" value="{{$.Back}}">
+              <button type="submit" class="btn sm danger">Точно удалить</button></form>
+          </details>
+          {{end}}
+        </div></td>
+      </tr>
+      {{end}}
+      {{end}}
+      </tbody>
+    </table></div>
+    {{if .KBTruncated}}<p class="k-sub k-pad">Показаны последние {{len .KBRows}} записей: правил больше 1000.</p>{{end}}
+    {{else if eq .KB "deleted"}}
+    <p class="empty">Удалённых правил нет.</p>
+    {{else if eq .KB "memory"}}
+    <p class="empty">Память пока пуста: бот записывает в неё, что узнал о проекте во время ревью.</p>
+    {{else}}
+    <p class="empty">Правил и памяти пока нет: бот запоминает правила из ответов в тредах («у нас так не делают», «запомни: …»).</p>
+    {{end}}
+  </section>
+
+  <section class="card" aria-labelledby="h-proj">
+    <div class="card-h">
+      <div class="ttl"><h2 id="h-proj">По проектам</h2><span class="count" data-proj-count>{{len .ProjectRows}}</span></div>
+      {{if .EmptyRows}}<label class="fl js-only"><input type="checkbox" data-hide-empty checked> скрыть проекты без решений и открытых замечаний ({{.EmptyRows}})</label>{{end}}
+    </div>
+    {{if .ProjectRows}}
+    <div class="scroll"><table class="k-tbl k-proj" data-proj>
+      <thead><tr><th scope="col">Проект</th><th scope="col" class="num">Точность</th><th scope="col" class="num">Решений</th><th scope="col">Исходы</th><th scope="col" class="num">Принято</th><th scope="col" class="num">Откл.</th><th scope="col" class="num">Ждут</th><th scope="col" class="num">Не прошли</th><th scope="col" class="num">Ботом</th><th scope="col" class="num">Правил</th><th scope="col" class="num">Память</th></tr></thead>
+      <tbody>
+      {{range .ProjectRows}}
+      <tr{{if .Empty}} data-empty{{end}}>
+        <td><a class="pname" href="{{.Href}}">{{.Project}}</a></td>
+        <td class="num">{{if .Precision}}<b>{{.Precision}}</b>{{if .Low}} <span class="lown" title="меньше {{$.LowLimit}} решений">мало</span>{{end}}{{else}}—{{end}}</td>
+        <td class="num">{{.Decided}}</td>
+        <td class="mini"><svg class="k-stack" viewBox="0 0 100 10" preserveAspectRatio="none" role="img" aria-label="{{.Tip}}" tabindex="0" data-tip="{{.Tip}}"><rect class="bg" width="100" height="10"/>{{range .Bar}}<rect class="c-{{.Status}}" x="{{.X}}" width="{{.Width}}" height="10"/>{{end}}</svg></td>
+        <td class="num{{if not .Fixed}} muted{{end}}">{{.Fixed}}</td>
+        <td class="num{{if not .Dismissed}} muted{{end}}">{{.Dismissed}}</td>
+        <td class="num{{if not .Open}} muted{{end}}">{{.Open}}</td>
+        <td class="num{{if not .Rejected}} muted{{end}}">{{.Rejected}}</td>
+        <td class="num{{if not .ByBot}} muted{{end}}">{{.ByBot}}</td>
+        <td class="num{{if not .Rules}} muted{{end}}">{{.Rules}}</td>
+        <td class="num{{if not .Memory}} muted{{end}}">{{if .Memory}}{{.Memory}} разд.{{else}}—{{end}}</td>
+      </tr>
+      {{end}}
+      </tbody>
+    </table></div>
+    <p class="k-sub k-pad">Точность = принятые / (принятые + отклонённые). «Закрыто ботом» и «не прошли проверку» в неё не входят.</p>
+    {{else}}
+    <p class="empty">За {{.Period}} замечаний не было.</p>
+    {{end}}
+  </section>
+
+  <section class="card" aria-labelledby="h-map">
+    <div class="maplink">
+      <div><div class="ttl"><h2 id="h-map">Карта системы</h2></div><p>Какие сервисы и адреса бот знает между репозиториями.</p></div>
+      <a class="btn sm" href="/map">Открыть карту</a>
+    </div>
+  </section>
+
+  <p class="note"><b>Что здесь:</b> тексты правил, памяти и замечаний пришли от людей и от модели — это недоверенные данные.
+  Удалённое правило бот не учитывает; его можно вернуть во вкладке «удалённые». Треды в GitLab это не трогает.</p>
+  <div class="tipbox" id="k-tip" role="tooltip" hidden></div>
+</main>
+
+<script nonce="{{.Nonce}}" src="{{.Filters}}"></script>
+<script nonce="{{.Nonce}}">
+{{.CommonJS}}
+</script>
+<script nonce="{{.Nonce}}" src="{{.PageJS}}"></script>
+<script nonce="{{.Nonce}}">
+D.initTheme();
+</script>
+</body>
+</html>

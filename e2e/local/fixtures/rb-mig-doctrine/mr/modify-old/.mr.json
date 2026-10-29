@@ -1,0 +1,7 @@
+{
+  "branch": "mig/modify-old-migration",
+  "title": "fix: статус по умолчанию draft в первой миграции",
+  "scenarios": "V12",
+  "description": "Правка уже смерженной миграции `Version20250101000000.php`.",
+  "expect": "В списке файлов «MODIFIED existing migration», подсказка `modified_migration` на первой добавленной строке."
+}

@@ -1,0 +1,7 @@
+{
+  "branch": "mig/drop-created-by-index-status",
+  "title": "refactor: убрать created_by, индекс по статусу, note обязательна",
+  "scenarios": "V6",
+  "description": "`op.drop_column`, `op.create_index` без `postgresql_concurrently=True`, `op.alter_column(..., nullable=False)`; в `downgrade()` — `op.drop_table`.",
+  "expect": "Три подсказки в промпте (удаление колонки с кандидатами в `app/models.py`/`app/repo.py`, индекс без CONCURRENTLY, NOT NULL), про `drop_table` в downgrade ничего; совет про `autocommit_block()` в замечании к индексу (major, не блокирует); удаление используемой колонки — critical с `deployed_usage`."
+}

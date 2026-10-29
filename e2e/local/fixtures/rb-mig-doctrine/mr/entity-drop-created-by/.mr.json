@@ -1,0 +1,7 @@
+{
+  "branch": "mig/entity-drop-created-by",
+  "title": "refactor: перестать использовать Order::createdBy",
+  "scenarios": "V2, V13",
+  "description": "Код больше не читает `created_by` (подготовка к удалению колонки). Смержить перед повторным ревью `mig/drop-created-by` (V2).",
+  "expect": "MR без миграций: ни раздела миграций в промпте, ни `deployed_usage` в схеме (V13). После мержа — V2 для `mig/drop-created-by`."
+}

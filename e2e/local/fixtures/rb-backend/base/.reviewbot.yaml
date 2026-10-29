@@ -1,0 +1,15 @@
+# reviewbot settings of rb-backend (local stand). Read from the target branch.
+language: ru
+
+path_instructions:
+  - path: "migrations/**"
+    instructions: "Проверяй обратимость и блокировки таблиц"
+  - path: "api/**"
+    instructions: "Проверяй обратную совместимость контрактов и валидацию входных данных"
+
+context:
+  related:
+    - repo: "reviewbot-sandbox/rb-frontend"
+      note: "фронтенд, вызывает /api/v1/users из src/api/client.ts"
+    - repo: "reviewbot-sandbox-ext/ext-client"
+      note: "внешний клиент API пользователей (группа вне gitlab.groups)"

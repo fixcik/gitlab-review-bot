@@ -1,0 +1,13 @@
+# reviewbot settings of rb-py (local stand). This project does NOT require
+# resolved threads for merging (E7).
+language: ru
+coverage:
+  job: "tests"
+  path: "coverage.xml"
+  min: 80
+# Linter results from CI (docs/features/lint.md): the bot does not run ruff.
+# K4: switch to `artifact: ruff.sarif` to read the SARIF copy instead.
+lint:
+  ci:
+    - job: ruff
+      report: codequality

@@ -1,0 +1,185 @@
+/* ---- filter bar (ReviewFilters, webassets.FiltersPath;
+   docs/usage-and-diagnostics.md, «Панель фильтров») ----
+   One compact density. Colours come from the page tokens above, so light,
+   dark and the manual theme toggle work without extra rules. */
+.rf {
+  --rf-h: 32px; --rf-r: 6px; --rf-fs: 13px; --rf-gap: 6px; --rf-pad: 10px;
+  --rf-on-accent: #ffffff;
+  --rf-pop-shadow: 0 2px 4px rgba(31, 30, 36, .08), 0 8px 24px rgba(31, 30, 36, .12);
+  container: rf / inline-size;
+  /* width-based sizing: works in a block, next to a heading in a row flex
+     (shrinks to the free space) and in a column flex. Never put the bar in an
+     auto-width slot: with the container query it has no width of its own. */
+  width: 100%;
+  flex: 0 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--rf-gap);
+  font-size: var(--rf-fs);
+  line-height: 1.3;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .rf { --rf-on-accent: #1f1e24; --rf-pop-shadow: 0 2px 4px rgba(0, 0, 0, .35), 0 8px 24px rgba(0, 0, 0, .4); }
+}
+:root[data-theme="dark"] .rf { --rf-on-accent: #1f1e24; --rf-pop-shadow: 0 2px 4px rgba(0, 0, 0, .35), 0 8px 24px rgba(0, 0, 0, .4); }
+
+.rf *, .rf *::before, .rf *::after { box-sizing: border-box; }
+.rf [hidden] { display: none !important; }
+:where(.rf) button, :where(.rf) input { font: inherit; color: inherit; margin: 0; }
+:where(.rf) button { cursor: pointer; }
+.rf :focus { outline: none; }
+.rf :focus-visible { outline: none; box-shadow: 0 0 0 1px var(--focus-gap), 0 0 0 3px var(--focus); }
+
+.rf-ico { width: 16px; height: 16px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.rf-fields { display: flex; flex-wrap: wrap; align-items: center; gap: var(--rf-gap); min-width: 0; }
+
+/* ---------- the field pill: "Label  value ×" ---------- */
+.rf-field {
+  position: relative; display: inline-flex; align-items: stretch;
+  height: var(--rf-h); max-width: 100%; min-width: 0;
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--rf-r);
+  transition: border-color .12s, background-color .12s;
+}
+.rf-field:hover { border-color: var(--text-3); }
+.rf-field.is-set { background: var(--accent-soft); border-color: var(--accent-line); }
+.rf-field.is-set:hover { border-color: var(--accent); }
+.rf-field.is-open { border-color: var(--accent); }
+
+.rf .rf-trigger {
+  display: inline-flex; align-items: center; gap: 5px; min-width: 0; height: 100%;
+  padding: 0 10px 0 var(--rf-pad); border: 0; background: none; border-radius: var(--rf-r);
+  color: inherit; white-space: nowrap; text-align: left;
+}
+.rf-field.is-set .rf-trigger { padding-right: 2px; border-radius: var(--rf-r) 0 0 var(--rf-r); }
+.rf .rf-trigger:focus-visible, .rf .rf-clear:focus-visible { box-shadow: inset 0 0 0 2px var(--focus); }
+
+.rf-label { color: var(--text-2); flex: none; }
+.rf-value { min-width: 0; overflow: hidden; text-overflow: ellipsis; max-width: var(--rf-vmax, 220px); color: var(--text-strong); font-weight: 500; }
+.rf-value.is-placeholder { color: var(--text-2); font-weight: 400; }
+.rf-field.is-set .rf-label { color: var(--accent-strong); }
+.rf-field.is-set .rf-value { color: var(--accent-strong); font-weight: 600; }
+.rf-ico--caret { width: 14px; height: 14px; color: var(--text-2); transition: transform .12s; }
+.rf-field.is-open .rf-ico--caret { transform: rotate(180deg); }
+.rf-field.is-set .rf-trigger .rf-ico--caret { display: none; }
+
+/* colour swatch of an option (option.swatch = a token name, set via CSSOM) */
+.rf-swatch { display: inline-block; flex: none; width: 10px; height: 10px; border-radius: 2px; background: var(--rf-sw, var(--text-3)); }
+
+.rf-clear {
+  display: inline-flex; align-items: center; justify-content: center; flex: none;
+  width: 30px; height: 100%; padding: 0; border: 0; background: none;
+  color: var(--accent-strong); border-radius: 0 var(--rf-r) var(--rf-r) 0;
+}
+.rf-clear .rf-ico { width: 14px; height: 14px; stroke-width: 1.8; }
+.rf-clear:hover { background: var(--accent-line); color: var(--text-strong); }
+
+/* text */
+.rf .rf-trigger--text { cursor: text; gap: 8px; }
+.rf-prefix { color: var(--text-2); margin-right: -6px; }
+.rf-field.is-set .rf-prefix { color: var(--accent-strong); }
+.rf .rf-input {
+  width: var(--rf-w, 12ch); min-width: 4ch; height: auto; padding: 0; border: 0; border-radius: 0;
+  background: transparent; color: var(--text-strong); font-weight: 500; outline: none;
+}
+.rf .rf-input:focus-visible { box-shadow: none; }
+.rf-field.is-set .rf-input { color: var(--accent-strong); font-weight: 600; }
+.rf-input::placeholder { color: var(--text-2); font-weight: 400; opacity: 1; }
+.rf-field--text:focus-within { border-color: var(--focus); box-shadow: 0 0 0 1px var(--focus); }
+
+/* toggle */
+.rf-switch {
+  position: relative; flex: none; width: 24px; height: 14px; border-radius: 7px;
+  background: var(--subtle); border: 1px solid var(--text-3); transition: background-color .12s;
+}
+.rf-switch::after {
+  content: ""; position: absolute; top: 2px; left: 2px; width: 8px; height: 8px; border-radius: 50%;
+  background: var(--text-3); transition: transform .12s;
+}
+.rf-trigger--toggle .rf-value { color: var(--text); font-weight: 400; }
+.rf-field.is-set .rf-switch { background: var(--accent); border-color: var(--accent); }
+.rf-field.is-set .rf-switch::after { transform: translateX(10px); background: var(--rf-on-accent); }
+
+/* ---------- popover ---------- */
+.rf-pop {
+  position: absolute; top: calc(100% + 4px); left: -1px; z-index: 60;
+  min-width: max(calc(100% + 2px), 220px); max-width: min(420px, calc(100vw - 16px));
+  padding: 4px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+  box-shadow: var(--rf-pop-shadow); font-size: 13px;
+}
+.rf-pop--end { left: auto; right: -1px; }
+.rf-search { display: flex; align-items: center; gap: 6px; height: 34px; padding: 0 8px; margin: 0 0 4px; border-bottom: 1px solid var(--border); color: var(--text-2); }
+.rf .rf-search-input { flex: 1; min-width: 0; height: 100%; padding: 0; border: 0; background: transparent; color: var(--text-strong); }
+.rf .rf-search-input:focus-visible { box-shadow: none; }
+.rf-search-input::placeholder { color: var(--text-2); opacity: 1; }
+.rf-list { list-style: none; margin: 0; padding: 0; max-height: 280px; overflow: auto; overscroll-behavior: contain; }
+.rf .rf-list:focus-visible { box-shadow: none; }
+.rf-opt { display: flex; align-items: center; gap: 8px; min-height: 30px; padding: 5px 8px; border-radius: 6px; cursor: pointer; color: var(--text); }
+.rf-opt.is-active { background: var(--hover); }
+.rf-list:focus .rf-opt.is-active, .rf-search-input:focus ~ * .rf-opt.is-active { box-shadow: inset 0 0 0 1px var(--text-3); }
+.rf-opt[aria-selected="true"] { color: var(--accent-strong); font-weight: 600; }
+.rf-opt--all { color: var(--text-2); }
+.rf-group { padding: 10px 8px 4px; font-size: 12px; font-weight: 600; color: var(--text-2); letter-spacing: .02em; cursor: default; user-select: none; }
+.rf-group:first-child { padding-top: 4px; }
+.rf-opt + .rf-group { margin-top: 4px; border-top: 1px solid var(--subtle); }
+.rf-opt-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rf-opt-count { flex: none; margin-left: 12px; color: var(--text-2); font-size: 12px; font-weight: 400; }
+.rf-check { display: inline-flex; flex: none; width: 16px; height: 16px; align-items: center; justify-content: center; color: var(--accent-strong); }
+.rf-check .rf-ico { visibility: hidden; stroke-width: 2; }
+.rf-opt[aria-selected="true"] .rf-check .rf-ico { visibility: visible; }
+.rf-check--box { border: 1.5px solid var(--text-3); border-radius: 4px; }
+.rf-check--box .rf-ico { width: 12px; height: 12px; }
+.rf-opt[aria-selected="true"] .rf-check--box { background: var(--accent); border-color: var(--accent); color: var(--rf-on-accent); }
+.rf-empty { padding: 14px 8px; text-align: center; color: var(--text-2); }
+
+.rf-range { margin-top: 4px; padding: 8px 8px 4px; border-top: 1px solid var(--border); }
+.rf-range-title { font-size: 12px; color: var(--text-2); margin-bottom: 6px; }
+.rf-range-row { display: flex; align-items: center; gap: 6px; }
+.rf-range-sep { color: var(--text-2); }
+.rf .rf-date { flex: 1; min-width: 0; height: 30px; padding: 0 6px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text-strong); }
+.rf-range-ok { margin-top: 8px; width: 100%; height: 30px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface-2); font-weight: 500; }
+.rf-range-ok:hover { background: var(--hover); }
+
+/* ---------- tail: "N фильтров", "Сбросить всё" (only when a filter is on) ---------- */
+.rf-tail { display: inline-flex; align-items: center; gap: 4px; }
+.rf-count { color: var(--text-2); padding: 0 4px 0 2px; white-space: nowrap; }
+.rf-reset-all { height: 30px; padding: 0 10px; border: 0; border-radius: 6px; background: none; color: var(--link); font-weight: 500; white-space: nowrap; }
+.rf-reset-all:hover { background: var(--hover); text-decoration: underline; }
+
+/* narrow-mode toggle "Фильтры (N)" (hidden on wide containers) */
+.rf-toggle {
+  display: none; align-items: center; gap: 8px; height: var(--rf-h); padding: 0 12px;
+  border: 1px solid var(--border); border-radius: var(--rf-r); background: var(--surface); color: var(--text-strong); font-weight: 500;
+}
+.rf-toggle:hover { border-color: var(--text-3); }
+.rf.has-active .rf-toggle { border-color: var(--accent-line); background: var(--accent-soft); color: var(--accent-strong); }
+.rf-badge {
+  display: inline-flex; align-items: center; justify-content: center; min-width: 20px; height: 20px; padding: 0 6px;
+  border-radius: 10px; background: var(--accent); color: var(--rf-on-accent); font-size: 12px; font-weight: 600;
+}
+
+/* ---------- narrow containers ---------- */
+@container rf (max-width: 480px) {
+  /* default: collapse into "Фильтры (N)", fields open as a full-width column */
+  .rf:not(.rf--fixed) .rf-toggle { display: inline-flex; }
+  .rf:not(.rf--fixed) .rf-tail { margin-left: auto; }
+  .rf:not(.rf--fixed) .rf-fields { display: none; order: 3; flex: 1 0 100%; flex-direction: column; align-items: stretch; gap: 8px; }
+  .rf:not(.rf--fixed) .rf-toggle[aria-expanded="true"] ~ .rf-fields { display: flex; }
+  .rf:not(.rf--fixed) .rf-field { width: 100%; height: 36px; }
+  .rf:not(.rf--fixed) .rf-label { min-width: 72px; }
+  /* both modes: fields stretch, popovers take the field's width */
+  .rf .rf-trigger { flex: 1; }
+  .rf-value { max-width: none; flex: 1; }
+  .rf .rf-input { flex: 1; width: auto; }
+  .rf-pop, .rf-pop--end { left: -1px; right: -1px; min-width: 0; max-width: none; }
+  /* collapse:false (narrow sidebars): no toggle, each field fills the row */
+  .rf--fixed .rf-fields { flex: 1 1 100%; }
+  .rf--fixed .rf-field { flex: 1 1 100%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rf *, .rf *::before, .rf *::after { transition: none !important; }
+}

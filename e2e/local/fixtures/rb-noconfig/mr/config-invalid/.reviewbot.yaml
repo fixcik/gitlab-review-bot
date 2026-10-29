@@ -1,0 +1,8 @@
+# Onboarding MR with mistakes on purpose (R8): a typo in a key, a value
+# out of range and a removed key. Do not "fix" this fixture.
+language: ru
+auto_reviw: true
+tbd:
+  max_lines: -10
+tools:
+  - go test ./...

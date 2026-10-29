@@ -1,0 +1,11 @@
+# reviewbot settings of rb-consumer (local stand).
+language: ru
+context:
+  # L5: one reachable repository outside gitlab.groups, one without access, one typo.
+  related:
+    - repo: "reviewbot-sandbox-ext/ext-client"
+      note: "внешний клиент, тоже читает события пользователей"
+    - repo: "reviewbot-sandbox-ext/ext-secret"
+      note: "бот-аккаунт не имеет доступа"
+    - repo: "reviewbot-sandbox-ext/ext-clinet"
+      note: "опечатка в пути"

@@ -1,0 +1,7 @@
+{
+  "branch": "feat/shout",
+  "title": "feat: громкое приветствие",
+  "scenarios": "R6",
+  "description": "Функция `Shout`.",
+  "expect": "Репозиторий не подключён (нет `.reviewbot.yaml` в `main`): авторевью нет (в логе `repository not opted in`, метрика `reviewbot_skipped_total{reason=\"no_repo_config\"}`), заметок бота нет. `@reviewbot review` / вопрос / `@reviewbot pause` → один ответ «Репозиторий не подключён к ревью: добавьте `.reviewbot.yaml` в ветку `main` …»; `@reviewbot help` — справка с той же строкой."
+}

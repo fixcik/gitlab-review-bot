@@ -1,0 +1,7 @@
+{
+  "branch": "mig/orders-customer-fk",
+  "title": "feat: внешний ключ заказа на клиента",
+  "scenarios": "V11",
+  "description": "FK без `NOT VALID` на существующей таблице.",
+  "expect": "Подсказка про FK без `NOT VALID` (долгая блокировка при проверке существующих строк); совет `NOT VALID` + `VALIDATE CONSTRAINT`; замечание не выше major."
+}

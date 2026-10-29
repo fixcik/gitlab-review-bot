@@ -1,0 +1,7 @@
+{
+  "branch": "feat/avatar-storage",
+  "title": "feat: хранение аватаров в S3",
+  "scenarios": "K1",
+  "description": "Клиент S3 для аватаров пользователей и dev-конфиг.",
+  "expect": "gitleaks (`aws-access-token`): блокирующий тред 🔴 Critical на `deploy/dev.env` и на `internal/avatars/s3.go`; значение секрета нигде не показано (ни в треде, ни в саммари). Ключ сгенерирован seed.sh случайно (формат AKIA…, не настоящий)."
+}

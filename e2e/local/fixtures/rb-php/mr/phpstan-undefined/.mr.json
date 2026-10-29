@@ -1,0 +1,7 @@
+{
+  "branch": "lint/report-averages",
+  "title": "feat: средний чек в старом отчёте",
+  "scenarios": "K3, K5",
+  "description": "Метод `averages()` в `LegacyReport`.",
+  "expect": "Линтер из CI, отчёт в артефакте: job `phpstan` (`--error-format=gitlab`, `allow_failure`) падает, но сохраняет `phpstan.json` → треды `ci:phpstan` на изменённых строках: `variable.undefined` на `$undefined`, `function.notFound` на `vendor_helper()`; старые проблемы файла (`$legacyDefault`) не всплывают. Если ревью раньше пайплайна — сначала «⏳ ждём job `phpstan`», треды появляются после пайплайна без нового запуска Claude (K5)."
+}
