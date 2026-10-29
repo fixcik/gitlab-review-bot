@@ -1911,7 +1911,7 @@ visible instead of silent. Switch: `review.problems.enabled` (default true).
 - **Kinds** (fixed, `problems.Kinds()`, each with a Russian title, severity
   info/warn/error and a "how to fix" hint). Bot side: `lint_failed`,
   `base_unavailable`, `compat_failed`, `coverage_missing`, `context_unavailable`,
-  `jira_failed`, `advisor_unavailable`, `deep_review_unavailable`, `description_summary_failed`, `sysmap_failed`, `diff_truncated`,
+  `jira_failed`, `advisor_unavailable`, `deep_review_unavailable`, `description_summary_failed`, `sysmap_failed`, `sandbox_image_missing`, `diff_truncated`,
   `invalid_output`, `claude_auth_failed` (Claude answered 401: the token is replaced by hand, the command author is told so instead of "internal error"), `evidence_failed`, `mcp_failed`, `verify_failed`, `labels_failed`, `ci_fetch_failed`,
   `main_pipeline_failed` (review.ci, outside a review). Model reported:
   `model_tool_failed`, `model_missing_dependency`, `model_no_access`,

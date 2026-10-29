@@ -86,7 +86,7 @@
 | Ключ | Тип | По умолчанию | Описание |
 |---|---|---|---|
 | `sandbox.mode` | string | `"docker"` | `docker` — каждый запуск в одноразовом контейнере; `local` — Claude и проверки бота прямо на хосте **без изоляции** (только прототип). См. [deploy.md](deploy.md#локальный-режим-sandboxmode-local). |
-| `sandbox.image` | string | `"reviewbot-sandbox:latest"` | Образ песочницы ([`Dockerfile.sandbox`](../Dockerfile.sandbox)). `reviewbot init` пишет опубликованный `ghcr.io/fixcik/gitlab-review-bot-sandbox:latest` (= `REVIEWBOT_SANDBOX_IMAGE` в `.env`, [deploy.md](deploy.md#образы)). |
+| `sandbox.image` | string | `"reviewbot-sandbox:latest"` | Образ песочницы ([`Dockerfile.sandbox`](../Dockerfile.sandbox)). `reviewbot init` пишет опубликованный `ghcr.io/fixcik/gitlab-review-bot-sandbox:latest` (= `REVIEWBOT_SANDBOX_IMAGE` в `.env`, [deploy.md](deploy.md#образы)). Если образа нет на хосте, бот при старте скачивает его в фоне (`docker pull`, повтор раз в час, проблема `sandbox_image_missing`). |
 | `sandbox.network` | string | `"reviewbot-sandbox"` | Docker-сеть контейнеров с Claude. Должна быть `internal` (без маршрута наружу), см. [`docker-compose.yml`](../docker-compose.yml). |
 | `sandbox.egress_proxy` | string | `"http://egress:3128"` | Адрес egress-прокси изнутри сети песочницы (передаётся как `HTTPS_PROXY`). |
 | `sandbox.egress_allow` | list of string | `[api.anthropic.com, statsig.anthropic.com, claude.ai, console.anthropic.com]` | Хосты, к которым прокси пропускает `CONNECT …:443`. Точное имя или `*.example.com` (только поддомены). Читается командой `reviewbot egress -config …` (в `docker-compose.yml` — из смонтированного конфига); без `-config` прокси использует значения по умолчанию. |

@@ -67,7 +67,7 @@
 |---|---|---|
 | `checkout: … fetch …` 401/403 | токен бот-аккаунта истёк или нет доступа к проекту | обновите `GITLAB_TOKEN`, дайте роль Reporter |
 | `checkout: …` ошибка TLS | внутренний CA не в системном хранилище | укажите `gitlab.ca_file` (действует на API и `git fetch`) или добавьте CA в систему/образ бота |
-| `claude: docker run failed`, `Unable to find image` | нет образа песочницы | `docker compose pull` (приватный пакет — `docker login ghcr.io`, [deploy.md](deploy.md#образы)) или `docker compose build`; проверьте `reviewbot doctor` |
+| `claude: docker run failed`, `Unable to find image`; проблема `sandbox_image_missing` | нет образа песочницы, а фоновый pull бота не удался | `reviewbot doctor --pull` или `docker compose pull` на хосте (приватный пакет — `docker login ghcr.io`, [deploy.md](deploy.md#образы)), либо `docker compose build` |
 | `network reviewbot-sandbox not found` | не поднята сеть | `docker compose up -d egress` |
 | `claude run aborted after 15m0s` | таймаут `claude.timeout` | увеличьте таймаут, уменьшите `max_diff_bytes`/`max_files` |
 | в транскрипте Claude ошибки соединения, в логе egress `egress denied` / `egress dial failed` | хост не в allowlist или egress не запущен | `docker compose ps egress`, проверьте `sandbox.egress_allow` |
