@@ -105,6 +105,9 @@ func serve(ctx context.Context, logger *slog.Logger, args []string) error {
 	logger = diagRec.Logger(logger)
 	lim := limits.New(core.Store(st), cfg.Limits.GlobalRunsPerHour, cfg.Limits.ExemptUsers, time.Now)
 	probs := newProblems(cfg, st, tm, logger)
+	if cfg.Sandbox.Mode == "docker" { // pull a missing sandbox image in the background (sandboximage.go)
+		go ensureSandboxImage(ctx, sandboxImageDeps{image: cfg.Sandbox.Image, probs: probs, logger: logger})
+	}
 
 	// Checkouts and the Claude runner.
 	repos, err := newRepos(cfg, dataDir, logger)
