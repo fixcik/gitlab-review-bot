@@ -46,7 +46,7 @@ func endSpan(sp *tracing.Span, r request, code int, err error) {
 		sp.SetAttr(tracing.Int("http.response.status_code", code))
 	}
 	switch {
-	case isMissingFile(r, code):
+	case isMissingFile(r, code, err):
 		// The file is simply not there (optional files such as
 		// .reviewbot.yaml): an answer, not a failure. The status stays.
 	case code >= 400:
@@ -58,12 +58,15 @@ func endSpan(sp *tracing.Span, r request, code int, err error) {
 	sp.End()
 }
 
-// isMissingFile reports a 404 of the repository files API: callers ask for
-// optional files, so the span of that answer is not an error (a 404 of any
-// other endpoint, and any other status, still is).
-func isMissingFile(r request, code int) bool {
+// isMissingFile reports a completed 404 answer of the repository files API:
+// callers ask for optional files, so the span of that answer is not an error.
+// A 404 of any other endpoint, any other status, and a response whose body
+// could not be read (err is not the typed *Error) still are.
+func isMissingFile(r request, code int, err error) bool {
+	var ge *Error
 	return code == http.StatusNotFound && r.method == http.MethodGet &&
-		strings.Contains(r.u.EscapedPath(), "/repository/files/")
+		strings.Contains(r.u.EscapedPath(), "/repository/files/") &&
+		errors.As(err, &ge)
 }
 
 // errorClass is the error.type of a request that got no HTTP status.

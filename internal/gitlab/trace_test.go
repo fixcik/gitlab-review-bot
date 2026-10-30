@@ -141,3 +141,29 @@ func TestClientSpansMissingFile(t *testing.T) {
 		t.Error("404 on an MR is not an error")
 	}
 }
+
+// A 404 whose body could not be read is a failed request, not "file missing".
+func TestClientSpansMissingFileBodyReadFails(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Length", "100")
+		w.WriteHeader(http.StatusNotFound)
+		w.Write([]byte("short"))
+	}))
+	defer srv.Close()
+	c, err := New(srv.URL, "glpat-TOKENvalue123456", WithRetry(0, 0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := &sink{}
+	tr := tracing.New(tracing.Options{Exporter: s})
+	ctx, root := tr.Start(context.Background(), "job")
+	_, _ = c.GetRawFile(ctx, 42, ".reviewbot.yaml", "main")
+	root.End()
+	req := s.spans[0]
+	if v, _ := req.AttrValue("http.response.status_code"); v.Int != 404 {
+		t.Fatalf("status: %v", v)
+	}
+	if req.Status != tracing.StatusError {
+		t.Error("a 404 with a failed body read is not marked as an error")
+	}
+}
