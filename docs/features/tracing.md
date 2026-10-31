@@ -113,6 +113,10 @@ review.job  (consumer)  gitlab.project=group/app gitlab.mr.iid=7 job.kind=auto_r
 └─ review.summary → gitlab.update_note
 ```
 
+Спан HTTP-запроса получает статус «ошибка» при коде 400 и выше, кроме одного случая: ответ 404 на
+чтение файла репозитория (`…/repository/files/…`) — это «файла нет» (необязательные файлы вроде
+`.reviewbot.yaml`), а не сбой. Код ответа в спане остаётся, красным он не отмечается.
+
 Отдельные трассы:
 
 - `POST /webhook` (server) — каждый запрос вебхука: `gitlab.event`,

@@ -86,3 +86,84 @@ func TestClientSpans(t *testing.T) {
 		}
 	}
 }
+
+// A missing repository file is an answer, not a failure (optional files such
+// as .reviewbot.yaml): its span is not an error. A 404 elsewhere, or any 5xx
+// on a file, still is.
+func TestClientSpansMissingFile(t *testing.T) {
+	code := http.StatusNotFound
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(code)
+	}))
+	defer srv.Close()
+	c, err := New(srv.URL, "glpat-TOKENvalue123456", WithRetry(1, 0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := &sink{}
+	tr := tracing.New(tracing.Options{Exporter: s})
+	ctx, root := tr.Start(context.Background(), "job")
+	_, _ = c.GetRawFile(ctx, 42, ".reviewbot.yaml", "main") // 404 on a file
+	code = http.StatusInternalServerError
+	_, _ = c.GetRawFile(ctx, 42, "a.go", "main") // 500 on a file
+	code = http.StatusNotFound
+	_, _ = c.GetMR(ctx, 42, 7) // 404 on an MR
+	root.End()
+	// Retries make several spans for the 500; look them up by what they are.
+	var missing, serverErr, mr *tracing.SpanData
+	for _, d := range s.spans {
+		v, _ := d.AttrValue("http.response.status_code")
+		switch {
+		case v.Int == 404 && strings.Contains(d.Name, "repository/files"):
+			missing = d
+		case v.Int == 500:
+			serverErr = d
+		case v.Int == 404:
+			mr = d
+		}
+	}
+	if missing == nil || serverErr == nil || mr == nil {
+		t.Fatalf("spans not found: %v %v %v", missing, serverErr, mr)
+	}
+	if v, _ := missing.AttrValue("http.response.status_code"); v.Int != 404 {
+		t.Fatalf("status not recorded: %v", v)
+	}
+	if missing.Status == tracing.StatusError {
+		t.Error("404 on a repository file is marked as an error")
+	}
+	if _, ok := missing.AttrValue("error.type"); ok {
+		t.Error("404 on a repository file has error.type")
+	}
+	if serverErr.Status != tracing.StatusError {
+		t.Error("500 on a repository file is not an error")
+	}
+	if mr.Status != tracing.StatusError {
+		t.Error("404 on an MR is not an error")
+	}
+}
+
+// A 404 whose body could not be read is a failed request, not "file missing".
+func TestClientSpansMissingFileBodyReadFails(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Length", "100")
+		w.WriteHeader(http.StatusNotFound)
+		w.Write([]byte("short"))
+	}))
+	defer srv.Close()
+	c, err := New(srv.URL, "glpat-TOKENvalue123456", WithRetry(0, 0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := &sink{}
+	tr := tracing.New(tracing.Options{Exporter: s})
+	ctx, root := tr.Start(context.Background(), "job")
+	_, _ = c.GetRawFile(ctx, 42, ".reviewbot.yaml", "main")
+	root.End()
+	req := s.spans[0]
+	if v, _ := req.AttrValue("http.response.status_code"); v.Int != 404 {
+		t.Fatalf("status: %v", v)
+	}
+	if req.Status != tracing.StatusError {
+		t.Error("a 404 with a failed body read is not marked as an error")
+	}
+}
