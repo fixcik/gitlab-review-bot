@@ -82,6 +82,8 @@ func runCommand(logger *slog.Logger, cmd string, args []string) error {
 		return runSyncHooks(ctx, args)
 	case "runs":
 		return runRuns(ctx, args, os.Stdout)
+	case "bench":
+		return runBench(ctx, logger)
 	case "help", "-h", "--help":
 		fmt.Println("usage: reviewbot [serve -config config.yaml | egress -listen :3128 [-config config.yaml] [-mcp-listen :8091 -mcp-forward host:port] | sync-hooks -config config.yaml [-dry-run] | runs [-config config.yaml] [-since 48h] [-status failed] [-json] | runs show <id> | validate-repo-config [path] | init [-non-interactive] [-no-pull] [-repo-config] | doctor [-config config.yaml] [-env .env] [-json] [-pull]]")
 		return nil

@@ -185,6 +185,8 @@ func (r *Reviewer) handleReview(ctx context.Context, job core.Job) error {
 	if err != nil {
 		return r.reviewRunFailed(ctx, rv, err)
 	}
+	// 10a. Second look (followup.go): extra findings of an independent run.
+	r.followUp(ctx, rv)
 	r.settleFindings(ctx, rv)
 
 	// 11. Publish findings, then breaking changes (always blocking) and

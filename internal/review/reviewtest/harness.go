@@ -120,6 +120,10 @@ func New(t *testing.T) *Harness {
 	// The fakes have no .reviewbot.yaml unless a test sets one: review every
 	// repository, as before the opt-in (review/repoconfig_test.go turns it on).
 	cfg.Review.RequireRepoConfig = false
+	// The second look (review.followup, on by default) adds a Claude run per
+	// review and review.recall changes the prompt; tests of other features
+	// script one run, so both are off here and followup_test.go turns them on.
+	cfg.Review.FollowUp, cfg.Review.Recall = false, false
 	// The verification of findings (review.verify, on by default) adds a
 	// Claude run whenever a critical/major finding is reported; the tests of
 	// other features script one run per review, so it is off here and the
