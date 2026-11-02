@@ -142,6 +142,10 @@ func (r *Reviewer) reviewUserPrompt(rv *reviewRun, ms *mcp.Run) (string, error) 
 	if err != nil {
 		return "", fmt.Errorf("render prompt: %w", err)
 	}
+	// review.recall: the coverage rule is the last thing the model reads.
+	if r.env.Cfg.Review.Recall {
+		prompt += recallRule
+	}
 	return prompt, nil
 }
 

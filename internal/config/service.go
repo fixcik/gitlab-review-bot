@@ -98,6 +98,14 @@ type Review struct {
 	// Lower findings are resolved right away by the service token (visible,
 	// not blocking). critical | major | minor | nit; default critical.
 	BlockMinSeverity string `yaml:"block_min_severity"`
+	// Recall asks the model to report every real defect it can tie to the
+	// changed lines, minor and nit included (see review/bench.go recallRule).
+	// Default true: more findings of low severity.
+	Recall bool `yaml:"recall"`
+	// FollowUp runs a second review in a new conversation after the first one
+	// and adds the findings it did not repeat (see review/followup.go).
+	// Default true: one more Claude run per review.
+	FollowUp bool `yaml:"followup"`
 	// AssignReviewer adds the bot to the MR's reviewers (via the service
 	// token) when it reviews. Default true; no-op without a service token.
 	AssignReviewer bool `yaml:"assign_reviewer"`
@@ -198,6 +206,8 @@ func Defaults() Service {
 
 			BlockMinSeverity: "critical",
 			AssignReviewer:   true,
+			Recall:           true,
+			FollowUp:         true,
 			Learn:            defaultLearn(),
 
 			Context:       defaultReviewContext(),
