@@ -415,7 +415,7 @@ func TestRepoContextRelated(t *testing.T) {
 
 func TestTBDConfig(t *testing.T) {
 	d := Defaults().Review.TBD
-	if !d.Enabled || d.MaxLines != 2000 || d.MaxAge.D() != 72*time.Hour || d.MaxBehind != 30 || !d.Pipeline {
+	if !d.Enabled || d.MaxLines != 400 || d.MaxAge.D() != 72*time.Hour || d.MaxBehind != 30 || !d.Pipeline {
 		t.Fatalf("defaults %+v", d)
 	}
 	svc := Defaults()

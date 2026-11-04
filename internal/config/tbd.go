@@ -35,7 +35,7 @@ type TBD struct {
 }
 
 func defaultTBD() TBD {
-	return TBD{Enabled: true, MaxLines: 2000, MaxAge: Duration(72 * time.Hour), MaxBehind: 30, Pipeline: true, FeatureFlags: true}
+	return TBD{Enabled: true, MaxLines: 400, MaxAge: Duration(72 * time.Hour), MaxBehind: 30, Pipeline: true, FeatureFlags: true}
 }
 
 func (t TBD) validate() []string {
