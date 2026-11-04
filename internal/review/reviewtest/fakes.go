@@ -12,6 +12,7 @@ import (
 	"github.com/fixcik/gitlab-review-bot/internal/compat"
 	"github.com/fixcik/gitlab-review-bot/internal/config"
 	"github.com/fixcik/gitlab-review-bot/internal/core"
+	"github.com/fixcik/gitlab-review-bot/internal/review/marker"
 	"github.com/fixcik/gitlab-review-bot/internal/review/mcp"
 )
 
@@ -228,10 +229,21 @@ func (g *FakeGitLab) UpdateNote(_ context.Context, _, _, noteID int64, body stri
 	return nil
 }
 
+// isProgressThread: the state of the progress thread (review.progress_thread)
+// follows the replies and resolves; other threads stay as the test set them.
+func isProgressThread(d *core.Discussion) bool {
+	return len(d.Notes) > 0 && strings.Contains(d.Notes[0].Body, marker.ProgressThread)
+}
+
 func (g *FakeGitLab) ReplyToDiscussion(_ context.Context, _, _ int64, id, body string) error {
 	g.Mu.Lock()
 	defer g.Mu.Unlock()
 	g.Replies = append(g.Replies, Reply{id, body})
+	for i := range g.Discussions {
+		if d := &g.Discussions[i]; d.ID == id && isProgressThread(d) {
+			d.Notes = append(d.Notes, core.Note{ID: g.id(), AuthorID: BotID, AuthorUsername: BotName, Body: body})
+		}
+	}
 	return nil
 }
 
@@ -246,6 +258,15 @@ func (g *FakeGitLab) ResolveDiscussion(_ context.Context, _, _ int64, id string,
 	}
 	if resolved {
 		g.Resolved = append(g.Resolved, id)
+	}
+	for i := range g.Discussions {
+		if d := &g.Discussions[i]; d.ID == id && isProgressThread(d) {
+			d.Resolved = resolved
+			d.Notes[0].ResolvedByID, d.Notes[0].ResolvedByUsername = 0, ""
+			if resolved {
+				d.Notes[0].ResolvedByID, d.Notes[0].ResolvedByUsername = BotID, BotName
+			}
+		}
 	}
 	return nil
 }

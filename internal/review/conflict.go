@@ -79,6 +79,7 @@ func (r *Reviewer) reviewConflict(ctx context.Context, rv *reviewRun) (done bool
 	if job.Kind == core.JobForceReview || !r.mergeConflicts(ctx, job, mr) {
 		return false, nil
 	}
+	rv.conflicted = true
 	log.Info("review: merge conflict, claude review skipped", "target", mr.TargetBranch, "head", rv.head)
 	if r.onSkip != nil {
 		r.onSkip(skipConflict)

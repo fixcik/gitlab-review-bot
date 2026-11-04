@@ -49,6 +49,8 @@ type reviewRun struct {
 	state        *core.MRState // nil: never reviewed
 	knownSummary int64
 	head, from   string
+	conflicted   bool   // the merge conflict gate ended the job (conflict.go)
+	held         string // why a postponed or denied run did not happen (progress.go)
 	incremental  bool
 	co           core.Checkout
 	files        []string
@@ -90,7 +92,7 @@ type reviewTally struct {
 
 // handleReview runs an automatic review or a review command. Its numbered
 // steps are referred to across the package ("step 3", "flow step 7a").
-func (r *Reviewer) handleReview(ctx context.Context, job core.Job) error {
+func (r *Reviewer) handleReview(ctx context.Context, job core.Job) (err error) {
 	rv := &reviewRun{job: job, log: r.env.Log.With("mr", job.MRKey(), "kind", job.Kind), manual: job.Kind.Manual()}
 
 	// 1-4. The MR, its repo config and the command author's permissions.
@@ -104,7 +106,17 @@ func (r *Reviewer) handleReview(ctx context.Context, job core.Job) error {
 
 	// 5a. Merge conflict (conflict.go): no Claude run until the author resolves it.
 	if done, err := r.reviewConflict(ctx, rv); done {
+		if rv.conflicted {
+			r.progressConflict(ctx, rv)
+		}
 		return err
+	}
+
+	// 5b. The "review not finished" thread (progress.go): from here the review
+	// runs, and the thread says how it ended.
+	if r.env.Cfg.Review.ProgressThread {
+		r.progressStart(ctx, rv)
+		defer func() { r.progressFinish(ctx, rv, err) }()
 	}
 
 	// 6. Checkout and diff (before the limits: the size gate needs the diff).
@@ -386,9 +398,11 @@ func (rv *reviewRun) reserveRequest() core.ReserveRequest {
 func (r *Reviewer) reviewDenied(ctx context.Context, rv *reviewRun, dec core.Decision) error {
 	if rv.manual {
 		jobctx.Denied(ctx)
+		rv.held = dec.Reason
 		return r.env.Reply(ctx, rv.job, "⛔ "+dec.Reason)
 	}
 	at := r.env.RetryAt(dec.RetryAt)
+	rv.held = dec.Reason
 	r.notePostponed(ctx, rv.job, rv.state, rv.knownSummary, at, dec.Reason)
 	return &core.RetryLater{At: at, Reason: dec.Reason}
 }
@@ -414,6 +428,7 @@ func (r *Reviewer) reviewRunFailed(ctx context.Context, rv *reviewRun, err error
 		at := r.env.RetryAt(rl.ResetAt)
 		log.Warn("review: claude rate limited", "retry_at", at, "msg", rl.Message)
 		r.notePostponed(ctx, job, rv.state, rv.threads.SummaryID, at, reasonClaudeLimit)
+		rv.held = reasonClaudeLimit
 		if rv.manual {
 			if rerr := r.env.Reply(ctx, job, fmt.Sprintf(msgPostponed, r.env.Clock(at), reasonClaudeLimit)); rerr != nil {
 				log.Warn("review: reply postponed", "err", rerr)
