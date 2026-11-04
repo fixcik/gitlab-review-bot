@@ -234,7 +234,7 @@ func TestLabelFacts(t *testing.T) {
 		Migrations: &migcheck.Run{Res: &migrations.Result{Files: []migrations.File{{Path: "db/1.sql"}}}},
 		Compat:     &compatcheck.Run{Res: &compat.Result{Specs: []compat.Spec{{Kind: "openapi", Path: "api.yaml"}}}},
 		Lint:       &linters.Run{Res: &lint.Result{Tools: reviewtest.Ran(lint.ToolGitleaks)}},
-		TBD:        &pipeline.TBDStatus{SizeKnown: true, Added: 500, Removed: 1},
+		TBD:        &pipeline.TBDStatus{SizeKnown: true, Added: 2500, Removed: 1},
 	})
 	want := map[string]labels.Tri{config.FactMigrations: labels.TriYes, config.FactAPIChanged: labels.TriYes, config.FactAPIBreaking: labels.TriNo,
 		config.FactBigMR: labels.TriYes, config.FactLintSecret: labels.TriNo, config.FactNoTestsChanged: labels.TriYes}
