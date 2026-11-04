@@ -152,6 +152,9 @@ type Reviewer struct {
 	// onRoute: see Deps.OnRoute (route.go); may be nil.
 	onRoute func(route string)
 
+	// progress: the "review not finished" thread (progress.go).
+	progress progressState
+
 	mu sync.Mutex
 	// enqueue schedules a job (SetEnqueue, commands.go); guarded by mu.
 	enqueue func(core.Job)

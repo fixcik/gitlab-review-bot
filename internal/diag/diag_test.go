@@ -216,6 +216,8 @@ func (fakeGitLab) CreateNote(context.Context, int64, int64, string) (int64, erro
 	return 202, nil
 }
 func (fakeGitLab) UpdateNote(context.Context, int64, int64, int64, string) error { return nil }
+func (fakeGitLab) CreateDiscussion(context.Context, int64, int64, string) error  { return nil }
+func (fakeGitLab) DeleteNote(context.Context, int64, int64, int64) error         { return nil }
 func (fakeGitLab) ReplyToDiscussion(context.Context, int64, int64, string, string) error {
 	return nil
 }

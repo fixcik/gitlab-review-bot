@@ -54,6 +54,8 @@ type FakeGitLab struct {
 	CreatedNotes   []int64
 	UpdatedNotes   []int64
 	Replies        []Reply
+	DeletedNotes   []int64
+	CreatedThreads int
 	Resolved       []string
 	FailDraftFor   string // substring in body -> CreateDraftNote fails
 	FailResolveFor string // discussion id -> ResolveDiscussion fails
@@ -244,6 +246,42 @@ func (g *FakeGitLab) ReplyToDiscussion(_ context.Context, _, _ int64, id, body s
 			d.Notes = append(d.Notes, core.Note{ID: g.id(), AuthorID: BotID, AuthorUsername: BotName, Body: body})
 		}
 	}
+	return nil
+}
+
+// CreateDiscussion adds a resolvable thread of the bot.
+func (g *FakeGitLab) CreateDiscussion(_ context.Context, _, _ int64, body string) error {
+	g.Mu.Lock()
+	defer g.Mu.Unlock()
+	g.CreatedThreads++
+	did, nid := g.id(), g.id()
+	g.Discussions = append(g.Discussions, core.Discussion{
+		ID: fmt.Sprintf("disc%d", did), Resolvable: true,
+		Notes: []core.Note{{ID: nid, AuthorID: BotID, AuthorUsername: BotName, Body: body}},
+	})
+	return nil
+}
+
+// DeleteNote removes the note from every discussion; a discussion left
+// without notes disappears (as in GitLab). A missing note is not an error.
+func (g *FakeGitLab) DeleteNote(_ context.Context, _, _, noteID int64) error {
+	g.Mu.Lock()
+	defer g.Mu.Unlock()
+	g.DeletedNotes = append(g.DeletedNotes, noteID)
+	var ds []core.Discussion
+	for _, d := range g.Discussions {
+		var ns []core.Note
+		for _, n := range d.Notes {
+			if n.ID != noteID {
+				ns = append(ns, n)
+			}
+		}
+		d.Notes = ns
+		if len(ns) > 0 {
+			ds = append(ds, d)
+		}
+	}
+	g.Discussions = ds
 	return nil
 }
 

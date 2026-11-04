@@ -230,6 +230,14 @@ func (g *memoGitLab) UpdateNote(ctx context.Context, projectID, mrIID, noteID in
 	return writeMR(ctx, projectID, mrIID, func() error { return g.GitLab.UpdateNote(ctx, projectID, mrIID, noteID, body) })
 }
 
+func (g *memoGitLab) CreateDiscussion(ctx context.Context, projectID, mrIID int64, body string) error {
+	return writeMR(ctx, projectID, mrIID, func() error { return g.GitLab.CreateDiscussion(ctx, projectID, mrIID, body) })
+}
+
+func (g *memoGitLab) DeleteNote(ctx context.Context, projectID, mrIID, noteID int64) error {
+	return writeMR(ctx, projectID, mrIID, func() error { return g.GitLab.DeleteNote(ctx, projectID, mrIID, noteID) })
+}
+
 func (g *memoGitLab) ReplyToDiscussion(ctx context.Context, projectID, mrIID int64, discussionID, body string) error {
 	return writeMR(ctx, projectID, mrIID, func() error {
 		return g.GitLab.ReplyToDiscussion(ctx, projectID, mrIID, discussionID, body)

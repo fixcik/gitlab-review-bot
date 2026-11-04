@@ -95,6 +95,12 @@ type reviewTally struct {
 func (r *Reviewer) handleReview(ctx context.Context, job core.Job) (err error) {
 	rv := &reviewRun{job: job, log: r.env.Log.With("mr", job.MRKey(), "kind", job.Kind), manual: job.Kind.Manual()}
 
+	// The "review not finished" thread (progress.go): whatever the exit, it
+	// is deleted (nothing left to wait for) or left with the reason.
+	if r.env.Cfg.Review.ProgressThread {
+		defer func() { r.progressFinish(ctx, rv, err) }()
+	}
+
 	// 1-4. The MR, its repo config and the command author's permissions.
 	if done, err := r.reviewPreflight(ctx, rv); done {
 		return err
@@ -106,17 +112,7 @@ func (r *Reviewer) handleReview(ctx context.Context, job core.Job) (err error) {
 
 	// 5a. Merge conflict (conflict.go): no Claude run until the author resolves it.
 	if done, err := r.reviewConflict(ctx, rv); done {
-		if rv.conflicted {
-			r.progressConflict(ctx, rv)
-		}
 		return err
-	}
-
-	// 5b. The "review not finished" thread (progress.go): from here the review
-	// runs, and the thread says how it ended.
-	if r.env.Cfg.Review.ProgressThread {
-		r.progressStart(ctx, rv)
-		defer func() { r.progressFinish(ctx, rv, err) }()
 	}
 
 	// 6. Checkout and diff (before the limits: the size gate needs the diff).

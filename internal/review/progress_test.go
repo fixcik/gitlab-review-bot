@@ -17,8 +17,11 @@ func progressHarness(t *testing.T) *reviewtest.Harness {
 	h := reviewtest.New(t)
 	h.Cfg.Review.ProgressThread = true
 	h.GL.PublishMakesThreads = true
+	reviewtest.WithFlags(h) // before the first R: pause is a flag of the store
 	return h
 }
+
+func pauseMR(h *reviewtest.Harness) { h.Deps.MRFlags.(*reviewtest.FlagStore).Paused["42!7"] = "bob" }
 
 func okRun(t *testing.T) []reviewtest.RunResp {
 	return []reviewtest.RunResp{{Out: reviewtest.ReviewOut(t, nil, nil)}}
@@ -39,6 +42,23 @@ func progressThreads(h *reviewtest.Harness) []core.Discussion {
 
 func lastBody(d core.Discussion) string { return d.Notes[len(d.Notes)-1].Body }
 
+// queued is the moment an automatic review is queued by an event: the
+// thread opens in the background.
+func queued(h *reviewtest.Harness, job core.Job) {
+	h.R().Accepted(func(core.Job) {})(job)
+	h.R().WaitProgress()
+}
+
+// closeByPerson resolves every discussion as a person.
+func closeByPerson(h *reviewtest.Harness) {
+	h.GL.Mu.Lock()
+	defer h.GL.Mu.Unlock()
+	for i := range h.GL.Discussions {
+		h.GL.Discussions[i].Resolved = true
+		h.GL.Discussions[i].Notes[0].ResolvedByID, h.GL.Discussions[i].Notes[0].ResolvedByUsername = 777, "alice"
+	}
+}
+
 func oneThread(t *testing.T, h *reviewtest.Harness) core.Discussion {
 	t.Helper()
 	ds := progressThreads(h)
@@ -57,53 +77,165 @@ func TestProgressThreadOffByDefault(t *testing.T) {
 	h := reviewtest.New(t)
 	h.GL.PublishMakesThreads = true
 	h.Runner.Resps = okRun(t)
+	queued(h, reviewtest.AutoJob())
 	if err := handle(t, h, reviewtest.AutoJob()); err != nil {
 		t.Fatal(err)
 	}
-	if len(progressThreads(h)) != 0 || len(h.GL.Replies) != 0 {
-		t.Fatalf("thread without the option: %+v %+v", h.GL.Discussions, h.GL.Replies)
+	if len(h.GL.Discussions) != 0 || h.GL.CreatedThreads != 0 || len(h.GL.DeletedNotes) != 0 || len(h.GL.Replies) != 0 {
+		t.Fatalf("thread without the option: %+v", h.GL.Discussions)
 	}
 }
 
-func TestProgressThreadClosedAfterReview(t *testing.T) {
+func TestProgressThreadOpenedWhenQueued(t *testing.T) {
 	h := progressHarness(t)
-	h.Runner.Resps = okRun(t)
-	if err := handle(t, h, reviewtest.AutoJob()); err != nil {
-		t.Fatal(err)
-	}
-	d := oneThread(t, h)
-	first := d.Notes[0].Body
+	queued(h, reviewtest.AutoJob())
+	first := oneThread(t, h).Notes[0].Body
 	if !strings.Contains(first, "Идёт ревью") || marker.HasBlocking(first) {
 		t.Errorf("first note: %q", first)
 	}
-	if !d.Resolved || !strings.Contains(lastBody(d), "✅ Ревью завершено (`head1111`)") {
-		t.Errorf("not closed with the done reply: resolved=%v last=%q", d.Resolved, lastBody(d))
+	// More events (a push, the other event source): still one thread.
+	queued(h, reviewtest.AutoJob())
+	queued(h, reviewtest.AutoJob())
+	if n := len(progressThreads(h)); n != 1 || h.GL.CreatedThreads != 1 {
+		t.Fatalf("threads %d, created %d", n, h.GL.CreatedThreads)
+	}
+	// Concurrent events too.
+	h2 := progressHarness(t)
+	for i := 0; i < 8; i++ {
+		h2.R().Accepted(func(core.Job) {})(reviewtest.AutoJob())
+	}
+	h2.R().WaitProgress()
+	if h2.GL.CreatedThreads != 1 {
+		t.Fatalf("created %d threads", h2.GL.CreatedThreads)
 	}
 }
 
-func TestProgressThreadNotForSkippedReviews(t *testing.T) {
-	h := progressHarness(t)
-	h.GL.MR.Draft = true
-	if err := handle(t, h, reviewtest.AutoJob()); err != nil {
-		t.Fatal(err)
+func TestProgressThreadNotOpenedWhenNoReviewIsExpected(t *testing.T) {
+	for name, setup := range map[string]func(h *reviewtest.Harness){
+		"draft":  func(h *reviewtest.Harness) { h.GL.MR.Draft = true },
+		"closed": func(h *reviewtest.Harness) { h.GL.MR.State = "closed" },
+		"head reviewed": func(h *reviewtest.Harness) {
+			h.St.States["42!7"] = core.MRState{ProjectID: reviewtest.PID, MRIID: reviewtest.IID, ReviewedSHA: "head111111111111"}
+		},
+		"ignore marker": func(h *reviewtest.Harness) { h.GL.MR.Description = "@" + reviewtest.BotName + " ignore" },
+		"paused":        pauseMR,
+	} {
+		t.Run(name, func(t *testing.T) {
+			h := progressHarness(t)
+			setup(h)
+			queued(h, reviewtest.AutoJob())
+			if h.GL.CreatedThreads != 0 {
+				t.Fatalf("thread opened: %+v", h.GL.Discussions)
+			}
+		})
 	}
-	h.GL.MR.Draft = false
+	// Manual commands do not open it.
+	h := progressHarness(t)
+	queued(h, reviewtest.ManualJob(core.JobReview))
+	if h.GL.CreatedThreads != 0 {
+		t.Fatal("thread opened for a command")
+	}
+}
+
+func TestProgressThreadDeletedAfterReview(t *testing.T) {
+	h := progressHarness(t)
+	queued(h, reviewtest.AutoJob())
 	h.Runner.Resps = okRun(t)
 	if err := handle(t, h, reviewtest.AutoJob()); err != nil {
 		t.Fatal(err)
 	}
-	n := len(h.GL.Replies)
-	// The head is reviewed now: nothing is opened, replied or reopened.
+	if n := len(progressThreads(h)); n != 0 {
+		t.Fatalf("thread stays: %+v", h.GL.Discussions)
+	}
+	if len(h.GL.Replies) != 0 || len(h.GL.Resolved) != 0 {
+		t.Fatalf("replies %v resolved %v", h.GL.Replies, h.GL.Resolved)
+	}
+}
+
+func TestProgressThreadDeletedWhenNoReviewIsNeeded(t *testing.T) {
+	for name, tc := range map[string]struct {
+		change func(h *reviewtest.Harness)
+		job    core.Job
+	}{
+		"draft":         {func(h *reviewtest.Harness) { h.GL.MR.Draft = true }, reviewtest.AutoJob()},
+		"closed":        {func(h *reviewtest.Harness) { h.GL.MR.State = "merged" }, reviewtest.AutoJob()},
+		"pause":         {pauseMR, reviewtest.AutoJob()},
+		"ignore marker": {func(h *reviewtest.Harness) { h.GL.MR.Description = "@" + reviewtest.BotName + " ignore" }, reviewtest.AutoJob()},
+		"auto review off": {func(h *reviewtest.Harness) {
+			h.GL.RepoConfig = "auto_review: false\n"
+		}, reviewtest.AutoJob()},
+		"head reviewed": {func(h *reviewtest.Harness) {
+			h.St.States["42!7"] = core.MRState{ProjectID: reviewtest.PID, MRIID: reviewtest.IID, ReviewedSHA: "head111111111111"}
+		}, reviewtest.AutoJob()},
+		"nothing to review": {func(h *reviewtest.Harness) { h.Repos.Diff, h.Repos.Files = "", nil }, reviewtest.AutoJob()},
+	} {
+		t.Run(name, func(t *testing.T) {
+			h := progressHarness(t)
+			queued(h, reviewtest.AutoJob())
+			if h.GL.CreatedThreads != 1 {
+				t.Fatal("no thread opened")
+			}
+			tc.change(h)
+			if err := handle(t, h, tc.job); err != nil {
+				t.Fatal(err)
+			}
+			if n := len(progressThreads(h)); n != 0 {
+				t.Fatalf("thread stays: %+v", h.GL.Discussions)
+			}
+		})
+	}
+}
+
+func TestProgressThreadDeletedOnTrivialIncrement(t *testing.T) {
+	h := trivialHarness(t, fileDiff("README.md", "@@ -1 +1,2 @@\n # API\n+More words.\n"), []string{"README.md"}, nil, nil)
+	h.Cfg.Review.ProgressThread = true
+	queued(h, reviewtest.AutoJob()) // reviewed at trivOld, the head moved on
+	if h.GL.CreatedThreads != 1 {
+		t.Fatal("no thread opened")
+	}
 	if err := handle(t, h, reviewtest.AutoJob()); err != nil {
 		t.Fatal(err)
 	}
-	if len(h.GL.Replies) != n || len(progressThreads(h)) != 1 {
-		t.Fatalf("a reviewed head touched the thread: replies %d -> %d", n, len(h.GL.Replies))
+	if len(h.Runner.Reqs) != 0 || len(progressThreads(h)) != 0 {
+		t.Fatalf("claude %d, threads %d", len(h.Runner.Reqs), len(progressThreads(h)))
+	}
+}
+
+func TestProgressThreadDeletedWhenTooBig(t *testing.T) {
+	h := reviewtest.NewBigHarness(t, 2100)
+	h.Cfg.Review.ProgressThread = true
+	queued(h.Harness, reviewtest.AutoJob())
+	if h.GL.CreatedThreads != 1 {
+		t.Fatal("no thread opened")
+	}
+	if err := handle(t, h.Harness, reviewtest.AutoJob()); err != nil {
+		t.Fatal(err)
+	}
+	if len(h.Runner.Reqs) != 0 || len(progressThreads(h.Harness)) != 0 {
+		t.Fatalf("claude %d, threads %d", len(h.Runner.Reqs), len(progressThreads(h.Harness)))
+	}
+}
+
+func TestProgressThreadDeletedWithItsReplies(t *testing.T) {
+	h := progressHarness(t)
+	queued(h, reviewtest.AutoJob())
+	h.Runner.Resps = []reviewtest.RunResp{{Err: context.DeadlineExceeded}}
+	_ = handle(t, h, reviewtest.AutoJob())
+	if n := len(oneThread(t, h).Notes); n != 2 {
+		t.Fatalf("notes: %d", n)
+	}
+	h.Runner.Resps = okRun(t)
+	if err := handle(t, h, reviewtest.AutoJob()); err != nil {
+		t.Fatal(err)
+	}
+	if len(progressThreads(h)) != 0 || len(h.GL.DeletedNotes) != 2 {
+		t.Fatalf("threads %d, deleted %v", len(progressThreads(h)), h.GL.DeletedNotes)
 	}
 }
 
 func TestProgressThreadStaysOpenOnError(t *testing.T) {
 	h := progressHarness(t)
+	queued(h, reviewtest.AutoJob())
 	h.Runner.Resps = []reviewtest.RunResp{{Err: context.DeadlineExceeded}}
 	if err := handle(t, h, reviewtest.AutoJob()); err == nil {
 		t.Fatal("want an error")
@@ -121,8 +253,18 @@ func TestProgressThreadStaysOpenOnError(t *testing.T) {
 	}
 }
 
+func TestProgressThreadOpenedByFailureWhenMissing(t *testing.T) {
+	h := progressHarness(t) // not queued by an event (a restored job): the reason opens it
+	h.Runner.Resps = []reviewtest.RunResp{{Err: context.DeadlineExceeded}}
+	_ = handle(t, h, reviewtest.AutoJob())
+	if d := oneThread(t, h); d.Resolved || len(d.Notes) != 1 || !strings.Contains(d.Notes[0].Body, "⚠️ Ревью не удалось") {
+		t.Fatalf("%+v", d)
+	}
+}
+
 func TestProgressThreadStaysOpenWhenPostponed(t *testing.T) {
 	h := progressHarness(t)
+	queued(h, reviewtest.AutoJob())
 	h.Runner.Resps = []reviewtest.RunResp{{Err: &core.ErrClaudeRateLimited{ResetAt: reviewtest.TestNow.Add(time.Hour)}}}
 	err := handle(t, h, reviewtest.AutoJob())
 	if _, ok := core.AsRetryLater(err); !ok {
@@ -138,57 +280,78 @@ func TestProgressThreadStaysOpenWhenPostponed(t *testing.T) {
 	if n := len(oneThread(t, h).Notes); n != 2 {
 		t.Fatalf("notes after the retry: %d", n)
 	}
-}
-
-func TestProgressThreadReopenedByNewCommit(t *testing.T) {
-	h := progressHarness(t)
+	// The review passes at last: the thread is gone.
 	h.Runner.Resps = okRun(t)
 	if err := handle(t, h, reviewtest.AutoJob()); err != nil {
 		t.Fatal(err)
 	}
-	h.GL.MR.DiffRefs.HeadSHA = "head222222222222"
-	h.Runner.Resps = []reviewtest.RunResp{{Err: context.DeadlineExceeded}}
-	_ = handle(t, h, reviewtest.AutoJob())
-	d := oneThread(t, h) // the same thread, not a second one
-	if d.Resolved {
-		t.Fatal("the thread stayed closed")
+	if len(progressThreads(h)) != 0 {
+		t.Fatal("thread stays after the review")
 	}
-	var got []string
-	for _, n := range d.Notes {
-		got = append(got, n.Body)
-	}
-	if all := strings.Join(got, "\n"); !strings.Contains(all, "⏳ Ревью нового коммита `head2222`…") {
-		t.Fatalf("notes: %q", all)
-	}
-	// The thread is open and shows a failure: a retry of the same commit adds nothing.
-	n := len(d.Notes)
+}
+
+func TestProgressThreadNewCommitKeepsOneThread(t *testing.T) {
+	h := progressHarness(t)
+	queued(h, reviewtest.AutoJob())
 	h.Runner.Resps = okRun(t)
 	if err := handle(t, h, reviewtest.AutoJob()); err != nil {
 		t.Fatal(err)
 	}
-	d = oneThread(t, h)
-	if !d.Resolved || len(d.Notes) != n+1 || !strings.Contains(lastBody(d), "✅ Ревью завершено (`head2222`)") {
-		t.Fatalf("resolved=%v notes %d -> %d", d.Resolved, n, len(d.Notes))
+	// A second commit: a new thread, deleted again after the review.
+	h.GL.MR.DiffRefs.HeadSHA = "head222222222222"
+	job := reviewtest.AutoJob()
+	job.HeadSHA = "head222222222222"
+	queued(h, job)
+	if d := oneThread(t, h); len(d.Notes) != 1 || !strings.Contains(d.Notes[0].Body, "Идёт ревью") {
+		t.Fatalf("%+v", d)
+	}
+	h.Runner.Resps = okRun(t)
+	if err := handle(t, h, job); err != nil {
+		t.Fatal(err)
+	}
+	if len(progressThreads(h)) != 0 {
+		t.Fatal("thread stays")
 	}
 }
 
-func TestProgressThreadClosedByPersonIsNotReopened(t *testing.T) {
+// A push during a running review: the thread is the next review's too.
+func TestProgressThreadKeptForNewerQueuedCommit(t *testing.T) {
 	h := progressHarness(t)
-	// The review failed: the thread is open and a person closes it (an override).
-	h.Runner.Resps = []reviewtest.RunResp{{Err: context.DeadlineExceeded}}
-	_ = handle(t, h, reviewtest.AutoJob())
-	h.GL.Mu.Lock()
-	for i := range h.GL.Discussions {
-		h.GL.Discussions[i].Resolved = true
-		h.GL.Discussions[i].Notes[0].ResolvedByID, h.GL.Discussions[i].Notes[0].ResolvedByUsername = 777, "alice"
+	queued(h, reviewtest.AutoJob())
+	newer := reviewtest.AutoJob()
+	newer.HeadSHA = "head222222222222"
+	queued(h, newer)
+	h.Runner.Resps = okRun(t)
+	if err := handle(t, h, reviewtest.AutoJob()); err != nil {
+		t.Fatal(err)
 	}
-	h.GL.Mu.Unlock()
-	n := len(oneThread(t, h).Notes)
+	if len(progressThreads(h)) != 1 {
+		t.Fatal("thread deleted while a newer commit waits")
+	}
 	h.GL.MR.DiffRefs.HeadSHA = "head222222222222"
+	h.Runner.Resps = okRun(t)
+	if err := handle(t, h, newer); err != nil {
+		t.Fatal(err)
+	}
+	if len(progressThreads(h)) != 0 {
+		t.Fatal("thread stays after the last review")
+	}
+}
+
+func TestProgressThreadClosedByPersonIsLeftAlone(t *testing.T) {
+	h := progressHarness(t)
+	queued(h, reviewtest.AutoJob())
+	closeByPerson(h)
+	// Neither a new event, nor a failure, nor a success touches it.
+	queued(h, reviewtest.AutoJob())
 	h.Runner.Resps = []reviewtest.RunResp{{Err: context.DeadlineExceeded}}
 	_ = handle(t, h, reviewtest.AutoJob())
-	if d := oneThread(t, h); !d.Resolved || len(d.Notes) != n {
-		t.Fatalf("the person's override was touched: resolved=%v notes %d -> %d", d.Resolved, n, len(d.Notes))
+	h.Runner.Resps = okRun(t)
+	if err := handle(t, h, reviewtest.AutoJob()); err != nil {
+		t.Fatal(err)
+	}
+	if d := oneThread(t, h); !d.Resolved || len(d.Notes) != 1 || h.GL.CreatedThreads != 1 || len(h.GL.DeletedNotes) != 0 {
+		t.Fatalf("the person's override was touched: %+v created %d", d, h.GL.CreatedThreads)
 	}
 }
 
@@ -196,6 +359,7 @@ func TestProgressThreadOpenOnConflict(t *testing.T) {
 	restore := review.SetMergeStatusWaits(0, 0)
 	t.Cleanup(restore)
 	h := progressHarness(t)
+	queued(h, reviewtest.AutoJob())
 	h.GL.MR.TargetBranch = "dev"
 	h.GL.MR.MergeStatus, h.GL.MR.HasConflicts = "conflict", true
 	for i := 0; i < 2; i++ {
@@ -204,8 +368,17 @@ func TestProgressThreadOpenOnConflict(t *testing.T) {
 		}
 	}
 	d := oneThread(t, h)
-	if d.Resolved || !strings.Contains(d.Notes[0].Body, "⛔ Ревью не запускалось: конфликт слияния с `dev`") || len(d.Notes) != 1 {
+	if d.Resolved || !strings.Contains(lastBody(d), "⛔ Ревью не запускалось: конфликт слияния с `dev`") || len(d.Notes) != 2 {
 		t.Fatalf("resolved=%v notes=%+v", d.Resolved, d.Notes)
+	}
+	// The conflict is resolved and the review runs: the thread is gone.
+	h.GL.MR.MergeStatus, h.GL.MR.HasConflicts = "can_be_merged", false
+	h.Runner.Resps = okRun(t)
+	if err := handle(t, h, reviewtest.AutoJob()); err != nil {
+		t.Fatal(err)
+	}
+	if len(progressThreads(h)) != 0 {
+		t.Fatal("thread stays after the review")
 	}
 }
 
@@ -218,26 +391,5 @@ func TestProgressThreadOpenWhenCommandDenied(t *testing.T) {
 	d := oneThread(t, h)
 	if d.Resolved || !strings.Contains(lastBody(d), "⛔ Ревью не запущено: Лимит запусков исчерпан.") {
 		t.Fatalf("resolved=%v last=%q", d.Resolved, lastBody(d))
-	}
-}
-
-// The bot closes the thread with the service token: the resolver is not the
-// bot's own user, yet a new commit reopens it (the "done" reply is the sign).
-func TestProgressThreadClosedByServiceTokenIsReopened(t *testing.T) {
-	h := progressHarness(t)
-	h.Runner.Resps = okRun(t)
-	if err := handle(t, h, reviewtest.AutoJob()); err != nil {
-		t.Fatal(err)
-	}
-	h.GL.Mu.Lock()
-	for i := range h.GL.Discussions {
-		h.GL.Discussions[i].Notes[0].ResolvedByID, h.GL.Discussions[i].Notes[0].ResolvedByUsername = 888, "service-account"
-	}
-	h.GL.Mu.Unlock()
-	h.GL.MR.DiffRefs.HeadSHA = "head222222222222"
-	h.Runner.Resps = []reviewtest.RunResp{{Err: context.DeadlineExceeded}}
-	_ = handle(t, h, reviewtest.AutoJob())
-	if d := oneThread(t, h); d.Resolved || !strings.Contains(lastBody(d), "Ревью не удалось") {
-		t.Fatalf("not reopened: resolved=%v last %q", d.Resolved, lastBody(d))
 	}
 }

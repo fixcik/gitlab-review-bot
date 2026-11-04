@@ -167,6 +167,12 @@ type GitLab interface {
 	CreateNote(ctx context.Context, projectID, mrIID int64, body string) (int64, error)
 	UpdateNote(ctx context.Context, projectID, mrIID, noteID int64, body string) error
 	ReplyToDiscussion(ctx context.Context, projectID, mrIID int64, discussionID, body string) error
+	// CreateDiscussion starts a resolvable MR thread (no position) at once,
+	// without the draft notes of a review run.
+	CreateDiscussion(ctx context.Context, projectID, mrIID int64, body string) error
+	// DeleteNote removes one MR note (the bot's own); a note that is already
+	// gone is not an error. A thread without notes disappears.
+	DeleteNote(ctx context.Context, projectID, mrIID, noteID int64) error
 	ResolveDiscussion(ctx context.Context, projectID, mrIID int64, discussionID string, resolved bool) error
 
 	// AccessLevel returns the user's effective access level in the project,
