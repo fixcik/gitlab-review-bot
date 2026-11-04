@@ -47,6 +47,11 @@ func ParseLint(body string) (id, tool string, ok bool) {
 // TooBigThread heads the merge-blocking thread (review.big_mr.block).
 const TooBigThread = "<!-- reviewbot:too-big-gate -->"
 
+// ProgressThread heads the "review not finished" thread (review.progress_thread).
+// It carries no Blocking marker: the thread holds the merge only where the
+// project requires all threads to be resolved.
+const ProgressThread = "<!-- reviewbot:progress -->"
+
 // CIThreadPrefix starts the marker of the CI explanation thread.
 const CIThreadPrefix = "reviewbot:ci-explain"
 

@@ -76,3 +76,19 @@ func TestParseCompatNote(t *testing.T) {
 		}
 	}
 }
+
+// The "review not finished" thread (review.progress_thread) is not a finding
+// and not blocking: open or resolved, the scan counts none of it.
+func TestScanIgnoresProgressThread(t *testing.T) {
+	for _, resolved := range []bool{false, true} {
+		ds := []core.Discussion{{ID: "p", Resolved: resolved, Notes: []core.Note{
+			botNote(5, marker.ProgressThread+"\n⏳ **Идёт ревью.**"),
+			botNote(6, "✅ Ревью завершено"),
+		}}}
+		got := Scan(ds, 0, isBot)
+		if len(got.Open) != 0 || len(got.OpenCompat) != 0 || got.OpenLint != 0 || got.OpenLintBlocking != 0 ||
+			got.OpenSizeBlocking != 0 || got.OpenOtherBlocking != 0 || got.FixedPendingBlocking != 0 || got.SummaryID != 0 || got.CI != nil {
+			t.Fatalf("resolved=%v: counted: %+v", resolved, got)
+		}
+	}
+}

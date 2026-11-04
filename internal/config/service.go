@@ -106,6 +106,9 @@ type Review struct {
 	// and adds the findings it did not repeat (see review/followup.go).
 	// Default true: one more Claude run per review.
 	FollowUp bool `yaml:"followup"`
+	// ProgressThread keeps one thread in the MR while a review is not
+	// finished (see review/progress.go). Default false.
+	ProgressThread bool `yaml:"progress_thread"`
 	// AssignReviewer adds the bot to the MR's reviewers (via the service
 	// token) when it reviews. Default true; no-op without a service token.
 	AssignReviewer bool `yaml:"assign_reviewer"`
