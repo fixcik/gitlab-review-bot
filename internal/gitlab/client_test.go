@@ -780,3 +780,17 @@ func TestGetRawFileMaxCapsTheRead(t *testing.T) {
 		t.Fatalf("at the cap: %d %v", len(b), err)
 	}
 }
+
+func TestGetMRMergeStatus(t *testing.T) {
+	_, c := newFake(t, func(w http.ResponseWriter, r *http.Request) {
+		io.WriteString(w, `{"iid": 7, "project_id": 42, "state": "opened",
+			"detailed_merge_status": "conflict", "has_conflicts": true}`)
+	})
+	mr, err := c.GetMR(context.Background(), 42, 7)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if mr.MergeStatus != "conflict" || !mr.HasConflicts {
+		t.Fatalf("merge status %q conflicts %v", mr.MergeStatus, mr.HasConflicts)
+	}
+}

@@ -102,6 +102,11 @@ func (r *Reviewer) handleReview(ctx context.Context, job core.Job) error {
 		return err
 	}
 
+	// 5a. Merge conflict (conflict.go): no Claude run until the author resolves it.
+	if done, err := r.reviewConflict(ctx, rv); done {
+		return err
+	}
+
 	// 6. Checkout and diff (before the limits: the size gate needs the diff).
 	co, err := r.env.Repos.Checkout(ctx, job.ProjectPath, rv.mr)
 	if err != nil {
