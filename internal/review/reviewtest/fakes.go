@@ -35,7 +35,9 @@ type FakeGitLab struct {
 	Mu sync.Mutex
 	MR core.MergeRequest
 	// MRReads: the next GetMR results, one per call, before MR is returned again.
-	MRReads     []core.MergeRequest
+	MRReads []core.MergeRequest
+	// NoteErr fails CreateNote.
+	NoteErr     error
 	Diffs       []core.FileDiff
 	Discussions []core.Discussion
 	RepoConfig  string // "" -> ErrNotFound
@@ -206,6 +208,9 @@ func (g *FakeGitLab) DeleteDraftNotes(context.Context, int64, int64) error {
 func (g *FakeGitLab) CreateNote(_ context.Context, _, _ int64, body string) (int64, error) {
 	g.Mu.Lock()
 	defer g.Mu.Unlock()
+	if g.NoteErr != nil {
+		return 0, g.NoteErr
+	}
 	id := g.id()
 	g.Notes[id] = body
 	g.CreatedNotes = append(g.CreatedNotes, id)

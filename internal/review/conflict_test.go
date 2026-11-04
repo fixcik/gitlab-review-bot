@@ -2,6 +2,7 @@ package review_test
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 
@@ -163,5 +164,30 @@ func TestConflictKeepsEarlierSummary(t *testing.T) {
 	}
 	if st, _ := h.St.Get(); st.ReviewedSHA != "old000000000000" {
 		t.Fatalf("the reviewed head moved: %+v", st)
+	}
+}
+
+func TestHeadChangedWhileWaitingReviewsAsUsual(t *testing.T) {
+	h, skips := conflictHarness(t, "checking", false)
+	other := h.GL.MR
+	other.MergeStatus, other.HasConflicts = "conflict", true
+	other.DiffRefs.HeadSHA = "newhead00000000" // a push arrived: that status is of another head
+	h.GL.MRReads = []core.MergeRequest{h.GL.MR, other}
+	if err := h.R().Handle(context.Background(), reviewtest.AutoJob()); err != nil {
+		t.Fatal(err)
+	}
+	if len(h.Runner.Reqs) != 1 || len(*skips) != 0 {
+		t.Fatalf("runs %d skips %v", len(h.Runner.Reqs), *skips)
+	}
+}
+
+func TestConflictSummaryWriteFailureFailsTheJob(t *testing.T) {
+	h, _ := conflictHarness(t, "conflict", true)
+	h.GL.NoteErr = errors.New("gitlab is down")
+	if err := h.R().Handle(context.Background(), reviewtest.AutoJob()); err == nil {
+		t.Fatal("the job must fail so that it is retried")
+	}
+	if st, _ := h.St.Get(); st.SummaryNoteID != 0 {
+		t.Fatalf("state saved without a summary: %+v", st)
 	}
 }

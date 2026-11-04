@@ -206,7 +206,7 @@ func New(version string) *Metrics {
 		"Award emoji changes of the bot (review.reactions) by event (picked_up, done, failed, postponed, denied, thanks, ack, learned, clean_review) and result (added, exists, disabled = off in the repository, error, forbidden = GitLab answered 403, dropped = worker queue full).",
 		"event", "result")
 	m.Skipped = r.NewCounterVec("reviewbot_skipped_total",
-		"Reviews that deliberately ran no Claude, by reason: too_big (the reviewed range is over review.max_mr_lines; only the deterministic checks ran), trivial_increment (an automatic incremental review whose new commits change only whitespace, comments or docs; review.skip_trivial_increments), no_repo_config (no .reviewbot.yaml on the target branch while review.require_repo_config is on), repo_config_invalid (the target branch's .reviewbot.yaml is invalid).",
+		"Reviews that deliberately ran no Claude, by reason: conflict (the MR has a merge conflict with its target branch; the summary says so), too_big (the reviewed range is over review.max_mr_lines; only the deterministic checks ran), trivial_increment (an automatic incremental review whose new commits change only whitespace, comments or docs; review.skip_trivial_increments), no_repo_config (no .reviewbot.yaml on the target branch while review.require_repo_config is on), repo_config_invalid (the target branch's .reviewbot.yaml is invalid).",
 		"reason")
 	m.ReviewRoutes = r.NewCounterVec("reviewbot_review_route_total",
 		"Reviews by model route (review.routing): light (low-risk range: the light model, no advisor), heavy (big or risky range: review.routing.heavy_model, no advisor, no deep-review), normal (claude.model; also every review when routing is off).",

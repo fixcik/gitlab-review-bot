@@ -62,6 +62,11 @@ func (r *Reviewer) mergeConflicts(ctx context.Context, job core.Job, mr *core.Me
 			log.Warn("review: re-read merge status", "err", err)
 			return false
 		}
+		if next.DiffRefs.HeadSHA != mr.DiffRefs.HeadSHA {
+			// A push arrived while waiting: that status is of another head, and the push has its own job.
+			log.Info("review: head changed while waiting for the merge status, reviewing", "head", mr.DiffRefs.HeadSHA, "now", next.DiffRefs.HeadSHA)
+			return false
+		}
 		cur = next
 	}
 	return cur.HasConflicts
@@ -92,11 +97,11 @@ func (r *Reviewer) reviewConflict(ctx context.Context, rv *reviewRun) (done bool
 	summaryID := threads.SummaryID
 	if body != threads.SummaryBody {
 		if summaryID, err = r.upsertSummary(ctx, job, threads.SummaryID, r.withPauseLine(ctx, job, body)); err != nil {
-			log.Error("review: summary note", "err", err)
+			return true, err // not "done": the job fails and is retried, the block is the only result of this run
 		}
 	}
 	// State: the summary note, the reviewed head unchanged.
-	if err == nil && (rv.state == nil || rv.state.SummaryNoteID != summaryID) {
+	if rv.state == nil || rv.state.SummaryNoteID != summaryID {
 		s := core.MRState{ProjectID: job.ProjectID, MRIID: job.MRIID, SummaryNoteID: summaryID, UpdatedAt: r.env.Now()}
 		if rv.state != nil {
 			s.ReviewedSHA = rv.state.ReviewedSHA
