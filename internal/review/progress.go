@@ -60,10 +60,11 @@ func (r *Reviewer) findProgressThread(ctx context.Context, job core.Job) *progre
 			if !n.System && r.env.IsBotNote(n) {
 				th.last = n.Body
 			}
-			if n.ResolvedByID != 0 || n.ResolvedByUsername != "" {
-				th.byHuman = !r.env.IsBotNote(core.Note{AuthorID: n.ResolvedByID, AuthorUsername: n.ResolvedByUsername})
-			}
 		}
+		// The bot closes the thread right after its "done" reply, and with the
+		// service token, so the resolver is not always the bot's own user: a
+		// thread closed without that reply was closed by a person.
+		th.byHuman = th.resolved && !strings.HasPrefix(th.last, "✅")
 		found = th
 	}
 	return found

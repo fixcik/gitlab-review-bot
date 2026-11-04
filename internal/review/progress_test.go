@@ -174,10 +174,9 @@ func TestProgressThreadReopenedByNewCommit(t *testing.T) {
 
 func TestProgressThreadClosedByPersonIsNotReopened(t *testing.T) {
 	h := progressHarness(t)
-	h.Runner.Resps = okRun(t)
-	if err := handle(t, h, reviewtest.AutoJob()); err != nil {
-		t.Fatal(err)
-	}
+	// The review failed: the thread is open and a person closes it (an override).
+	h.Runner.Resps = []reviewtest.RunResp{{Err: context.DeadlineExceeded}}
+	_ = handle(t, h, reviewtest.AutoJob())
 	h.GL.Mu.Lock()
 	for i := range h.GL.Discussions {
 		h.GL.Discussions[i].Resolved = true
@@ -219,5 +218,26 @@ func TestProgressThreadOpenWhenCommandDenied(t *testing.T) {
 	d := oneThread(t, h)
 	if d.Resolved || !strings.Contains(lastBody(d), "⛔ Ревью не запущено: Лимит запусков исчерпан.") {
 		t.Fatalf("resolved=%v last=%q", d.Resolved, lastBody(d))
+	}
+}
+
+// The bot closes the thread with the service token: the resolver is not the
+// bot's own user, yet a new commit reopens it (the "done" reply is the sign).
+func TestProgressThreadClosedByServiceTokenIsReopened(t *testing.T) {
+	h := progressHarness(t)
+	h.Runner.Resps = okRun(t)
+	if err := handle(t, h, reviewtest.AutoJob()); err != nil {
+		t.Fatal(err)
+	}
+	h.GL.Mu.Lock()
+	for i := range h.GL.Discussions {
+		h.GL.Discussions[i].Notes[0].ResolvedByID, h.GL.Discussions[i].Notes[0].ResolvedByUsername = 888, "service-account"
+	}
+	h.GL.Mu.Unlock()
+	h.GL.MR.DiffRefs.HeadSHA = "head222222222222"
+	h.Runner.Resps = []reviewtest.RunResp{{Err: context.DeadlineExceeded}}
+	_ = handle(t, h, reviewtest.AutoJob())
+	if d := oneThread(t, h); d.Resolved || !strings.Contains(lastBody(d), "Ревью не удалось") {
+		t.Fatalf("not reopened: resolved=%v last %q", d.Resolved, lastBody(d))
 	}
 }
