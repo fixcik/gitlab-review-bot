@@ -307,28 +307,39 @@ func NoteProblems(ctx context.Context, lr *Run) {
 	}
 	if lr.Res == nil {
 		if lr.err != nil {
-			jobctx.BotProblem(ctx, problems.LintFailed, "линтеры и сканеры: проверка не запустилась", lr.err.Error())
+			jobctx.BotProblem(ctx, problems.LintFailed, subjectNotStarted, lr.err.Error())
 		}
 		return
 	}
+	problems.Resolve(ctx, problems.LintFailed, subjectNotStarted) // the run started now
 	for _, st := range lr.Res.Tools {
 		noteLintStatus(ctx, st)
 	}
 }
 
+// subjectNotStarted is the problem of a lint run that could not start.
+const subjectNotStarted = "линтеры и сканеры: проверка не запустилась"
+
+// lintFailureStates are the states of a tool recorded as a problem, as they
+// are spelled in its subject.
+var lintFailureStates = map[string]string{
+	lint.StateUnavailable: "недоступен",
+	lint.StateFailed:      "упал",
+	lint.StatePartial:     "отработал частично",
+}
+
 // noteLintStatus records a tool (or CI linter report) that was unavailable,
-// failed or ran partially; other states are not problems (a CI job still
-// running included).
+// failed or ran partially. A tool that ran fixes its earlier problems; other
+// states (a CI job still running, not applicable) change nothing.
 func noteLintStatus(ctx context.Context, st lint.ToolStatus) {
-	var state string
-	switch st.State {
-	case lint.StateUnavailable:
-		state = "недоступен"
-	case lint.StateFailed:
-		state = "упал"
-	case lint.StatePartial:
-		state = "отработал частично"
-	default:
+	if st.State == lint.StateRan {
+		for _, state := range lintFailureStates {
+			problems.Resolve(ctx, problems.LintFailed, st.Tool+": "+state)
+		}
+		return
+	}
+	state, ok := lintFailureStates[st.State]
+	if !ok {
 		return
 	}
 	jobctx.BotProblem(ctx, problems.LintFailed, st.Tool+": "+state, st.Reason)
