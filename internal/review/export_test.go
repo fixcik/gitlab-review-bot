@@ -2,6 +2,7 @@ package review
 
 import (
 	"context"
+	"time"
 
 	"github.com/fixcik/gitlab-review-bot/internal/config"
 	"github.com/fixcik/gitlab-review-bot/internal/core"
@@ -67,6 +68,7 @@ const (
 	RouteLight           = routeLight
 	RouteHeavy           = routeHeavy
 	RouteNormal          = routeNormal
+	SkipConflict         = skipConflict
 	SkipTooBig           = skipTooBig
 	SkipTrivial          = skipTrivial
 )
@@ -85,3 +87,10 @@ var (
 	WithGitLabMemo     = withGitLabMemo
 	WithProblemsSchema = withProblemsSchema
 )
+
+// SetMergeStatusWaits replaces the pauses before the merge status re-reads.
+func SetMergeStatusWaits(d ...time.Duration) (restore func()) {
+	old := mergeStatusWaits
+	mergeStatusWaits = d
+	return func() { mergeStatusWaits = old }
+}

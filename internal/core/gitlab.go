@@ -54,6 +54,11 @@ type MergeRequest struct {
 	// DivergedCommits is how many commits the target branch has that the
 	// source branch lacks (GitLab diverged_commits_count); -1 = unknown.
 	DivergedCommits int
+	// MergeStatus is GitLab's detailed_merge_status ("" = not reported);
+	// HasConflicts is has_conflicts. "checking", "unchecked" and "preparing"
+	// mean GitLab has not computed the merge status yet.
+	MergeStatus  string
+	HasConflicts bool
 	// Pipeline is the MR's head pipeline; nil when there is none.
 	Pipeline *Pipeline
 }

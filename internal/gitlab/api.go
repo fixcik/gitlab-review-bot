@@ -43,7 +43,11 @@ type apiMR struct {
 	CreatedAt      time.Time    `json:"created_at"`
 	// DivergedCommitsCount is returned with include_diverged_commits_count.
 	DivergedCommitsCount *int `json:"diverged_commits_count"`
-	HeadPipeline         *struct {
+	// DetailedMergeStatus and HasConflicts: whether the MR merges (GitLab
+	// computes them asynchronously: "checking" and "unchecked" mean "not yet").
+	DetailedMergeStatus string `json:"detailed_merge_status"`
+	HasConflicts        bool   `json:"has_conflicts"`
+	HeadPipeline        *struct {
 		ID     int64  `json:"id"`
 		Status string `json:"status"`
 		SHA    string `json:"sha"`
@@ -230,6 +234,8 @@ func (c *Client) GetMR(ctx context.Context, projectID, mrIID int64) (*core.Merge
 		WebURL:          m.WebURL,
 		CreatedAt:       m.CreatedAt,
 		DivergedCommits: -1,
+		MergeStatus:     m.DetailedMergeStatus,
+		HasConflicts:    m.HasConflicts,
 	}
 	if m.DivergedCommitsCount != nil {
 		out.DivergedCommits = *m.DivergedCommitsCount

@@ -32,8 +32,12 @@ type Reply struct {
 // FakeGitLab is core.GitLab (plus the CI, report and open-MR capabilities)
 // on one MR (NewFakeGitLab); it records what the reviewer writes.
 type FakeGitLab struct {
-	Mu          sync.Mutex
-	MR          core.MergeRequest
+	Mu sync.Mutex
+	MR core.MergeRequest
+	// MRReads: the next GetMR results, one per call, before MR is returned again.
+	MRReads []core.MergeRequest
+	// NoteErr fails CreateNote.
+	NoteErr     error
 	Diffs       []core.FileDiff
 	Discussions []core.Discussion
 	RepoConfig  string // "" -> ErrNotFound
@@ -130,6 +134,9 @@ func (g *FakeGitLab) GetMR(_ context.Context, p, i int64) (*core.MergeRequest, e
 	g.Mu.Lock()
 	defer g.Mu.Unlock()
 	mr := g.MR
+	if len(g.MRReads) > 0 { // successive reads of an MR whose merge status settles
+		mr, g.MRReads = g.MRReads[0], g.MRReads[1:]
+	}
 	return &mr, nil
 }
 
@@ -201,6 +208,9 @@ func (g *FakeGitLab) DeleteDraftNotes(context.Context, int64, int64) error {
 func (g *FakeGitLab) CreateNote(_ context.Context, _, _ int64, body string) (int64, error) {
 	g.Mu.Lock()
 	defer g.Mu.Unlock()
+	if g.NoteErr != nil {
+		return 0, g.NoteErr
+	}
 	id := g.id()
 	g.Notes[id] = body
 	g.CreatedNotes = append(g.CreatedNotes, id)

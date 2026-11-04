@@ -90,6 +90,13 @@ const (
 )
 
 const (
+	ConflictStart = "<!-- reviewbot:conflict -->"
+	ConflictEnd   = "<!-- /reviewbot:conflict -->"
+)
+
+var ConflictRe = regexp.MustCompile(`(?s)<!--\s*reviewbot:conflict\s*-->.*?<!--\s*/reviewbot:conflict\s*-->`)
+
+const (
 	VerifyStart = "<!-- reviewbot:verify -->"
 	VerifyEnd   = "<!-- /reviewbot:verify -->"
 )
