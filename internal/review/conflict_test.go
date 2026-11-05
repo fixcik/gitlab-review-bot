@@ -11,6 +11,7 @@ import (
 	"github.com/fixcik/gitlab-review-bot/internal/review/marker"
 	"github.com/fixcik/gitlab-review-bot/internal/review/output"
 	"github.com/fixcik/gitlab-review-bot/internal/review/reviewtest"
+	"github.com/fixcik/gitlab-review-bot/internal/review/summary"
 )
 
 func conflictHarness(t *testing.T, status string, conflicts bool) (*reviewtest.Harness, *[]string) {
@@ -146,7 +147,7 @@ var _ = output.Finding{}
 func TestConflictKeepsEarlierSummary(t *testing.T) {
 	h, _ := conflictHarness(t, "conflict", true)
 	// An earlier review wrote this summary and reviewed another head.
-	old := marker.Summary("old000000000000") + "\n## 🤖 Ревью\n\nНашёл 2 замечания.\n\n" + marker.TBDStart + "\ntbd\n" + marker.TBDEnd + "\n"
+	old := marker.Summary("old000000000000") + "\n## 🤖 Ревью\n\nНашёл 2 замечания.\n\n" + summary.GateClearLine + "\n\n" + marker.TBDStart + "\ntbd\n" + marker.TBDEnd + "\n"
 	h.GL.Notes = map[int64]string{900: old}
 	h.GL.Discussions = []core.Discussion{{ID: "summary", Notes: []core.Note{reviewtest.BotNote(900, old, nil)}}}
 	h.St.States["42!7"] = core.MRState{ProjectID: reviewtest.PID, MRIID: reviewtest.IID, ReviewedSHA: "old000000000000", SummaryNoteID: 900}
@@ -161,6 +162,14 @@ func TestConflictKeepsEarlierSummary(t *testing.T) {
 	}
 	if strings.Index(got, marker.ConflictStart) > strings.Index(got, "Нашёл 2 замечания.") {
 		t.Errorf("the block must come right under the title:\n%s", got)
+	}
+	// "No blocking threads" must not read as approval of the unreviewed head, and a
+	// later gate refresh must not bring it back.
+	if strings.Contains(got, summary.GateClearLine) || !strings.Contains(got, summary.GateUnreviewedLine) {
+		t.Errorf("gate line:\n%s", got)
+	}
+	if again, ok := summary.SetGateLine(got, summary.GateClearLine); !ok || again != got {
+		t.Errorf("a gate refresh lifted the unreviewed line:\n%s", again)
 	}
 	if st, _ := h.St.Get(); st.ReviewedSHA != "old000000000000" {
 		t.Fatalf("the reviewed head moved: %+v", st)
