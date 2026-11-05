@@ -481,12 +481,17 @@ type FakeRunner struct {
 	Lim   *FakeLimiter // to check Record happened before Run
 	RecAt []int        // number of records at each Run
 	OnRun func(core.RunRequest)
+	// OnExec answers Exec (nil = exit 127, a program that is not installed).
+	OnExec func(core.ExecRequest) *core.ExecResult
 }
 
 func (f *FakeRunner) Exec(_ context.Context, req core.ExecRequest) (*core.ExecResult, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.Execs = append(f.Execs, req)
+	if f.OnExec != nil {
+		return f.OnExec(req), nil
+	}
 	return &core.ExecResult{ExitCode: 127}, nil
 }
 

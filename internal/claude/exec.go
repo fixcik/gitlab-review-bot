@@ -54,6 +54,9 @@ func (r *runner) Exec(ctx context.Context, req core.ExecRequest) (*core.ExecResu
 		cmd.Env = append(append(scrubEnv(r.environ()), quietToolEnv...), req.Env...)
 	}
 	cmd.Stdin = nil
+	if req.Stdin != "" {
+		cmd.Stdin = strings.NewReader(req.Stdin)
+	}
 	start := time.Now()
 	r.log.Info("exec started", "mode", r.o.Mode, "cmd", req.Command[0], "container", name)
 	p := r.exec(ctx, cmd, name)
