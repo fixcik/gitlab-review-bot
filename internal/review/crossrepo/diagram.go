@@ -47,7 +47,20 @@ var (
 	htmlTagRe = regexp.MustCompile(`</?[A-Za-z!?]`)
 	// URI schemes that execute or embed content.
 	schemeRe = regexp.MustCompile(`(?i)\b(?:javascript|vbscript)\s*:|\bdata:[a-z]+/`)
+	// A sequence diagram participant ("participant X as ...") and the two ends of
+	// a message ("X->>Y: ...").
+	participantRe = regexp.MustCompile(`^\s*(?:participant|actor)\s+(\S+)`)
+	messageRe     = regexp.MustCompile(`^\s*([^\s:]+?)\s*-{1,2}[>x)]{1,2}[+-]?\s*([^\s:]+)\s*:`)
 )
+
+// sequenceKeywords are words Mermaid reads as statements, whatever their case:
+// as a participant name ("Loop") they break the whole diagram.
+var sequenceKeywords = map[string]bool{
+	"loop": true, "alt": true, "else": true, "opt": true, "par": true, "and": true,
+	"rect": true, "end": true, "critical": true, "option": true, "break": true,
+	"note": true, "participant": true, "actor": true, "box": true, "activate": true,
+	"deactivate": true, "autonumber": true, "title": true, "create": true, "destroy": true,
+}
 
 // forbiddenDiagram are case-insensitive substrings that are never allowed.
 var forbiddenDiagram = []string{
@@ -105,8 +118,30 @@ func sanitizeDiagram(s string) (string, error) {
 		case htmlTagRe.MatchString(l):
 			return "", fmt.Errorf("line %d: html tag", n+1)
 		}
+		if sequenceHeadRe.MatchString(head) {
+			if w := sequenceKeywordIn(l); w != "" {
+				return "", fmt.Errorf("line %d: %q is a mermaid keyword, not a participant name", n+1, w)
+			}
+		}
 	}
 	return strings.Join(lines, "\n"), nil
+}
+
+// sequenceKeywordIn returns the keyword that a line of a sequence diagram uses
+// as a participant name ("" when it uses none).
+func sequenceKeywordIn(l string) string {
+	var ids []string
+	if m := participantRe.FindStringSubmatch(l); m != nil {
+		ids = append(ids, m[1])
+	} else if m := messageRe.FindStringSubmatch(l); m != nil {
+		ids = append(ids, m[1], m[2])
+	}
+	for _, id := range ids {
+		if sequenceKeywords[strings.ToLower(id)] {
+			return id
+		}
+	}
+	return ""
 }
 
 // renderDiagramSection renders the marker-delimited section ("" for an
@@ -183,6 +218,7 @@ Diagram ("diagram" field):
 - Keep it small: at most 25 nodes/messages, at most ` + fmt.Sprint(maxDiagramLines) + ` lines, each line shorter than ` + fmt.Sprint(maxDiagramLineRunes) + ` characters. Write labels in ` + lang + `.
 - Highlight what is new or changed: in a sequenceDiagram with "Note over X: ..." notes; in a flowchart with "classDef changed fill:#fff3bf,stroke:#f08c00" and the ":::changed" class on new/changed nodes.
 - Raw Mermaid only: the first line must be "sequenceDiagram" or "flowchart TD" (or another direction). No code fences, no "%%{init}" directives, no click/link/href/call statements, no HTML tags (no <br>), no URLs. A diagram that breaks these rules is dropped.
+- In a sequenceDiagram never name a participant with a Mermaid keyword (Loop, Alt, Opt, Par, Rect, End, Critical, Break, Note, Box, Title): use "Poller" instead of "Loop", "Cache" instead of "Opt".
 - In an INCREMENTAL review (the user prompt says whether this one is full or incremental) the summary keeps the previous diagram when you return "". Return a new diagram only if the new commits change the picture, and then draw the merge request as a whole.`
 }
 
