@@ -2,6 +2,7 @@ package crossrepo_test
 
 import (
 	"context"
+	"errors"
 	"io"
 	"log/slog"
 	"strings"
@@ -226,13 +227,13 @@ func TestDiagramSectionHelper(t *testing.T) {
 	on := config.Effective{Diagram: true}
 	prev := crossrepo.RenderDiagramSection(flowDiagram)
 	out := &output.ReviewOutput{Diagram: "pie\n  \"a\": 1"}
-	if s := crossrepo.DiagramSection(log, on, out, prev, true); !strings.Contains(s, flowDiagram) {
+	if s := crossrepo.DiagramSection(context.Background(), log, on, nil, out, prev, true); !strings.Contains(s, flowDiagram) {
 		t.Fatal("invalid new diagram on incremental run must fall back to the previous one")
 	}
-	if s := crossrepo.DiagramSection(log, on, out, prev, false); s != "" {
+	if s := crossrepo.DiagramSection(context.Background(), log, on, nil, out, prev, false); s != "" {
 		t.Fatal("invalid diagram on a full run: no section")
 	}
-	if s := crossrepo.DiagramSection(log, config.Effective{}, &output.ReviewOutput{Diagram: seqDiagram}, prev, true); s != "" {
+	if s := crossrepo.DiagramSection(context.Background(), log, config.Effective{}, nil, &output.ReviewOutput{Diagram: seqDiagram}, prev, true); s != "" {
 		t.Fatal("disabled: no section")
 	}
 	if schema := crossrepo.DiagramSchema(jsonschema.Review, false); strings.Contains(schema, "\"diagram\"") {
@@ -240,5 +241,109 @@ func TestDiagramSectionHelper(t *testing.T) {
 	}
 	if crossrepo.DiagramSchema(jsonschema.Review, true) != jsonschema.Review {
 		t.Fatal("diagramSchema(true) must keep the schema")
+	}
+}
+
+// fakeChecker is a DiagramChecker with a scripted answer.
+type fakeChecker struct {
+	msg   string
+	err   error
+	calls []string
+}
+
+func (f *fakeChecker) Check(_ context.Context, d string) (string, error) {
+	f.calls = append(f.calls, d)
+	return f.msg, f.err
+}
+
+func TestDiagramSectionParserGate(t *testing.T) {
+	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	on := config.Effective{Diagram: true}
+	out := &output.ReviewOutput{Diagram: flowDiagram}
+	ctx := context.Background()
+
+	ok := &fakeChecker{}
+	if s := crossrepo.DiagramSection(ctx, log, on, ok, out, "", false); !strings.Contains(s, flowDiagram) || len(ok.calls) != 1 {
+		t.Fatalf("parsing diagram must be kept and checked once: %q, calls %d", s, len(ok.calls))
+	}
+	bad := &fakeChecker{msg: "Parse error on line 2"}
+	if s := crossrepo.DiagramSection(ctx, log, on, bad, out, "", false); s != "" {
+		t.Fatalf("diagram the parser rejects must be dropped: %q", s)
+	}
+	down := &fakeChecker{err: errors.New("no node in the image")}
+	if s := crossrepo.DiagramSection(ctx, log, on, down, out, "", false); !strings.Contains(s, flowDiagram) {
+		t.Fatalf("parser unavailable: the diagram is kept: %q", s)
+	}
+	// Rejected by sanitizeDiagram: the parser is not asked.
+	skip := &fakeChecker{}
+	crossrepo.DiagramSection(ctx, log, on, skip, &output.ReviewOutput{Diagram: "pie\n  \"a\": 1"}, "", false)
+	if len(skip.calls) != 0 {
+		t.Fatal("an invalid diagram must not reach the parser")
+	}
+	// Off: nothing to check.
+	off := &fakeChecker{}
+	crossrepo.DiagramSection(ctx, log, config.Effective{}, off, out, "", false)
+	if len(off.calls) != 0 {
+		t.Fatal("diagram off: no check")
+	}
+}
+
+func TestDiagramParserRejectedReviewGoesOn(t *testing.T) {
+	h := reviewtest.New(t)
+	var stdin string
+	h.Runner.OnExec = func(req core.ExecRequest) *core.ExecResult {
+		stdin = req.Stdin
+		return &core.ExecResult{ExitCode: 1, Stdout: "Parse error on line 2:\nExpecting 'ACTOR', got 'loop'"}
+	}
+	h.Runner.Resps = []reviewtest.RunResp{{Out: reviewOutDiagram(t, seqDiagram)}}
+	if err := h.R().Handle(context.Background(), reviewtest.AutoJob()); err != nil {
+		t.Fatal(err)
+	}
+	if stdin != seqDiagram {
+		t.Errorf("parser stdin: %q", stdin)
+	}
+	body := reviewtest.SummaryBody(t, h)
+	if strings.Contains(body, "mermaid") || !strings.Contains(body, "Добавлен LRU-кэш.") {
+		t.Fatalf("diagram dropped, review published:\n%s", body)
+	}
+}
+
+func TestDiagramParserUnavailableKeepsDiagram(t *testing.T) {
+	h := reviewtest.New(t) // FakeRunner.Exec: exit 127, the program is not installed
+	h.Runner.Resps = []reviewtest.RunResp{{Out: reviewOutDiagram(t, seqDiagram)}}
+	if err := h.R().Handle(context.Background(), reviewtest.AutoJob()); err != nil {
+		t.Fatal(err)
+	}
+	if body := reviewtest.SummaryBody(t, h); !strings.Contains(body, "```mermaid\nsequenceDiagram") {
+		t.Fatalf("diagram must be kept:\n%s", body)
+	}
+}
+
+func TestExecDiagramChecker(t *testing.T) {
+	run := func(res *core.ExecResult) (string, error) {
+		r := &reviewtest.FakeRunner{OnExec: func(req core.ExecRequest) *core.ExecResult {
+			if req.Stdin != "flowchart TD\nA-->B" || req.Timeout <= 0 || req.Dir == "" {
+				t.Errorf("exec request %+v", req)
+			}
+			return res
+		}}
+		return crossrepo.ExecDiagramChecker{Runner: r}.Check(context.Background(), "flowchart TD\nA-->B")
+	}
+	if msg, err := run(&core.ExecResult{}); msg != "" || err != nil {
+		t.Errorf("exit 0: %q %v", msg, err)
+	}
+	if msg, err := run(&core.ExecResult{ExitCode: 1, Stdout: "Parse error on line 2:\n^\n"}); err != nil || msg != "Parse error on line 2:\n^" {
+		t.Errorf("exit 1: %q %v", msg, err)
+	}
+	if msg, err := run(&core.ExecResult{ExitCode: 1}); err != nil || msg == "" {
+		t.Errorf("exit 1 without text must still be a problem: %q %v", msg, err)
+	}
+	for _, code := range []int{2, 127} {
+		if _, err := run(&core.ExecResult{ExitCode: code, Stderr: "boom"}); err == nil {
+			t.Errorf("exit %d must be an error", code)
+		}
+	}
+	if _, err := (crossrepo.ExecDiagramChecker{Runner: &reviewtest.FakeRunner{}}).Check(context.Background(), strings.Repeat("a", 70<<10)); err == nil {
+		t.Error("oversized diagram must not be checked")
 	}
 }
