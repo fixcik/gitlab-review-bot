@@ -138,6 +138,20 @@ func (g *FaultGitLab) UpdateNote(ctx context.Context, p, i, noteID int64, body s
 	return g.FakeGitLab.UpdateNote(ctx, p, i, noteID, body)
 }
 
+func (g *FaultGitLab) CreateDiscussion(ctx context.Context, p, i int64, body string) error {
+	if err := g.fault("CreateDiscussion"); err != nil {
+		return err
+	}
+	return g.FakeGitLab.CreateDiscussion(ctx, p, i, body)
+}
+
+func (g *FaultGitLab) DeleteNote(ctx context.Context, p, i, noteID int64) error {
+	if err := g.fault("DeleteNote"); err != nil {
+		return err
+	}
+	return g.FakeGitLab.DeleteNote(ctx, p, i, noteID)
+}
+
 func (g *FaultGitLab) ReplyToDiscussion(ctx context.Context, p, i int64, id, body string) error {
 	if err := g.fault("ReplyToDiscussion"); err != nil {
 		return err

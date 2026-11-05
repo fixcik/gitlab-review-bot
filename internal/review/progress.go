@@ -1,40 +1,87 @@
 package review
 
 // The "review not finished" thread (review.progress_thread): one thread per
-// MR, opened when a review is about to run, closed when it is done. It is not
-// blocking by itself (no marker.Blocking): it holds the merge only in a
-// project that requires all threads to be resolved. A person who closes it
-// overrides it: the bot does not reopen it. Failures of the thread never
-// fail the review.
+// MR, opened the moment an automatic review is queued (before the debounce
+// and the queue), deleted when there is nothing left to wait for: the review
+// finished, or none is needed (a draft, a pause, a reviewed head ...). It
+// stays, with the reason, when the review failed, was postponed or did not
+// start (a merge conflict, the limits). It is not blocking by itself (no
+// marker.Blocking): it holds the merge only in a project that requires all
+// threads to be resolved. The bot never closes it, so a closed thread was
+// closed by a person: a deliberate override, the bot neither touches nor
+// recreates it. Failures of the thread never fail the review.
 
 import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/fixcik/gitlab-review-bot/internal/core"
 	"github.com/fixcik/gitlab-review-bot/internal/review/jobctx"
 	"github.com/fixcik/gitlab-review-bot/internal/review/marker"
 	"github.com/fixcik/gitlab-review-bot/internal/review/mdtext"
-	"github.com/fixcik/gitlab-review-bot/internal/review/publish"
 )
 
 const (
 	msgProgressStart   = "⏳ **Идёт ревью.** Тред закроется сам, когда ревью завершится."
-	msgProgressCommit  = "⏳ Ревью нового коммита `%s`…"
-	msgProgressDone    = "✅ Ревью завершено (`%s`)"
 	msgProgressFailed  = "⚠️ Ревью не удалось: %s. Повторить: `%s review`"
 	msgProgressHeld    = "⛔ Ревью не запущено: %s"
 	msgProgressConflct = "⛔ Ревью не запускалось: конфликт слияния с `%s`"
 	prefixPostponed    = "⏳ Ревью отложено до "
+
+	progressEarlyTimeout = 30 * time.Second
 )
+
+// progressState serializes the work on one MR's thread (the early creation
+// runs beside the review job) and remembers the newest queued head.
+type progressState struct {
+	mu    sync.Mutex
+	locks map[string]*progressLock
+	want  map[string]string // MR key -> head of the newest queued automatic review
+	wg    sync.WaitGroup
+}
+
+type progressLock struct {
+	mu sync.Mutex
+	n  int
+}
+
+// lock takes the MR's lock; the returned func releases it.
+func (s *progressState) lock(key string) func() {
+	s.mu.Lock()
+	if s.locks == nil {
+		s.locks, s.want = map[string]*progressLock{}, map[string]string{}
+	}
+	l := s.locks[key]
+	if l == nil {
+		l = &progressLock{}
+		s.locks[key] = l
+	}
+	l.n++
+	s.mu.Unlock()
+	l.mu.Lock()
+	return func() {
+		l.mu.Unlock()
+		s.mu.Lock()
+		if l.n--; l.n == 0 {
+			delete(s.locks, key)
+		}
+		s.mu.Unlock()
+	}
+}
+
+// WaitProgress waits for the threads being opened in the background
+// (progressQueued); for tests and a clean shutdown.
+func (r *Reviewer) WaitProgress() { r.progress.wg.Wait() }
 
 // progressThread is the bot's progress thread found in the MR.
 type progressThread struct {
 	id       string
-	resolved bool
-	byHuman  bool   // a person resolved it
+	resolved bool   // closed by a person: the bot never closes it
 	last     string // the bot's newest note
+	noteIDs  []int64
 }
 
 // findProgressThread returns the newest progress thread of the bot (nil when
@@ -59,115 +106,141 @@ func (r *Reviewer) findProgressThread(ctx context.Context, job core.Job) *progre
 		for _, n := range d.Notes {
 			if !n.System && r.env.IsBotNote(n) {
 				th.last = n.Body
+				th.noteIDs = append(th.noteIDs, n.ID)
 			}
 		}
-		// The bot closes the thread right after its "done" reply, and with the
-		// service token, so the resolver is not always the bot's own user: a
-		// thread closed without that reply was closed by a person.
-		th.byHuman = th.resolved && !strings.HasPrefix(th.last, "✅")
 		found = th
 	}
 	return found
 }
 
-// progressUpdate is one change of the thread.
-type progressUpdate struct {
-	create  string                        // the first note's text when there is no thread ("" = do not create)
-	reply   string                        // the reply to an existing thread
-	quiet   func(th *progressThread) bool // no reply is needed (the state did not change)
-	resolve bool                          // close the thread, otherwise reopen it
+// progressCreate opens the thread with body as its first note.
+func (r *Reviewer) progressCreate(ctx context.Context, job core.Job, body string) {
+	text := mdtext.NeutralizeQuickActions(marker.ProgressThread + "\n" + body)
+	if err := r.env.GitLab.CreateDiscussion(ctx, job.ProjectID, job.MRIID, text); err != nil {
+		r.env.Log.Warn("review: progress thread not posted", "mr", job.MRKey(), "err", err)
+	}
 }
 
-// progressApply applies u to the MR's progress thread. Errors are logged:
-// the indicator never fails the review.
-func (r *Reviewer) progressApply(ctx context.Context, job core.Job, u progressUpdate) {
-	if !r.env.Cfg.Review.ProgressThread {
+// Accepted's hook: an automatic review was queued, so open the thread now,
+// without delaying the queue.
+func (r *Reviewer) progressQueued(job core.Job) {
+	if !r.env.Cfg.Review.ProgressThread || job.Kind != core.JobAutoReview {
 		return
 	}
+	r.progress.wg.Add(1)
+	go func() {
+		defer r.progress.wg.Done()
+		ctx, cancel := context.WithTimeout(context.Background(), progressEarlyTimeout)
+		defer cancel()
+		r.progressEarly(ctx, job)
+	}()
+}
+
+// progressEarly opens the MR's thread when a review is going to run, judging
+// by what the event and one MR read tell (the repository config is not read:
+// a review that turns out not to be needed deletes the thread).
+func (r *Reviewer) progressEarly(ctx context.Context, job core.Job) {
 	log := r.env.Log.With("mr", job.MRKey())
+	st, err := r.env.Store.GetMRState(ctx, job.ProjectID, job.MRIID)
+	if err != nil {
+		log.Warn("review: progress thread: get mr state", "err", err)
+		return
+	}
+	if !job.ForceFull && st != nil && st.ReviewedSHA != "" && st.ReviewedSHA == job.HeadSHA {
+		return // the head is reviewed already
+	}
+	mr, err := r.env.GitLab.GetMR(ctx, job.ProjectID, job.MRIID)
+	if err != nil {
+		log.Warn("review: progress thread: get mr", "err", err)
+		return
+	}
+	if mr.State != "opened" || mr.Draft {
+		return
+	}
+	if skip, err := r.skipAuto(ctx, job, mr); skip || err != nil {
+		return // ignore marker or pause
+	}
+	key := job.MRKey()
+	defer r.progress.lock(key)()
+	r.progress.want[key] = job.HeadSHA
+	if r.findProgressThread(ctx, job) == nil {
+		r.progressCreate(ctx, job, msgProgressStart)
+	}
+}
+
+// progressClear deletes the thread: there is nothing left to wait for. A
+// thread closed by a person stays. A review of a newer head is queued
+// meanwhile: its thread is this one, so it stays.
+func (r *Reviewer) progressClear(ctx context.Context, rv *reviewRun) {
+	job := rv.job
+	key := job.MRKey()
+	defer r.progress.lock(key)()
+	head := cmpOr(job.HeadSHA, rv.head)
+	if w := r.progress.want[key]; w != "" && head != "" && w != head {
+		return
+	}
+	delete(r.progress.want, key)
+	th := r.findProgressThread(ctx, job)
+	if th == nil || th.resolved {
+		return
+	}
+	// The first note goes last: a thread without notes is gone.
+	for i := len(th.noteIDs) - 1; i >= 0; i-- {
+		if err := r.env.GitLab.DeleteNote(ctx, job.ProjectID, job.MRIID, th.noteIDs[i]); err != nil {
+			r.env.Log.Warn("review: delete progress thread", "mr", key, "err", err)
+			return
+		}
+	}
+}
+
+// progressLeave keeps the thread open and says why the review did not run
+// or finish (a new thread starts with that text). quiet: the state did not
+// change, so no reply is needed (a retry of the same job).
+func (r *Reviewer) progressLeave(ctx context.Context, job core.Job, msg string, quiet func(last string) bool) {
+	defer r.progress.lock(job.MRKey())()
 	th := r.findProgressThread(ctx, job)
 	if th == nil {
-		if u.create == "" {
-			return
-		}
-		body := marker.ProgressThread + "\n" + u.create
-		if created, err := r.pub.Drafts(ctx, job, []publish.Draft{{Body: mdtext.NeutralizeQuickActions(body), What: "progress thread"}}); err != nil || !created[0] {
-			log.Warn("review: progress thread not posted", "err", err)
-			return
-		}
-		if th = r.findProgressThread(ctx, job); th == nil || !u.resolve {
-			return
-		}
-		u.reply, u.quiet = "", nil
+		r.progressCreate(ctx, job, msg)
+		return
 	}
-	if th.resolved && th.byHuman {
-		return // a person closed it: a deliberate override
+	if th.resolved || quiet(th.last) {
+		return
 	}
-	gl := r.env.GitLab
-	if !u.resolve && th.resolved {
-		if err := gl.ResolveDiscussion(ctx, job.ProjectID, job.MRIID, th.id, false); err != nil {
-			log.Warn("review: reopen progress thread", "err", err)
-			return
-		}
-	}
-	if u.reply != "" && (u.quiet == nil || !u.quiet(th)) {
-		if err := gl.ReplyToDiscussion(ctx, job.ProjectID, job.MRIID, th.id, mdtext.NeutralizeQuickActions(u.reply)); err != nil {
-			log.Warn("review: reply in progress thread", "err", err)
-		}
-	}
-	if u.resolve && !th.resolved {
-		if err := r.env.Resolve(ctx, job.ProjectID, job.MRIID, th.id); err != nil {
-			log.Warn("review: resolve progress thread", "err", err)
-		}
+	if err := r.env.GitLab.ReplyToDiscussion(ctx, job.ProjectID, job.MRIID, th.id, mdtext.NeutralizeQuickActions(msg)); err != nil {
+		r.env.Log.Warn("review: reply in progress thread", "mr", job.MRKey(), "err", err)
 	}
 }
 
-// progressStart opens the thread (or reopens it for a new commit) at the
-// start of a review that will run.
-func (r *Reviewer) progressStart(ctx context.Context, rv *reviewRun) {
-	r.progressApply(ctx, rv.job, progressUpdate{
-		create: msgProgressStart,
-		reply:  fmt.Sprintf(msgProgressCommit, mdtext.ShortSHA(rv.head)),
-		// A thread that is open and shows a failure, a postponement or a
-		// running review is the same review (a retry): no new reply.
-		quiet: func(th *progressThread) bool { return !th.resolved && !strings.HasPrefix(th.last, "✅") },
-	})
-}
-
-// progressConflict leaves an open thread that says why the review did not run.
-func (r *Reviewer) progressConflict(ctx context.Context, rv *reviewRun) {
-	msg := fmt.Sprintf(msgProgressConflct, rv.mr.TargetBranch)
-	r.progressApply(ctx, rv.job, progressUpdate{create: msg, reply: msg,
-		quiet: func(th *progressThread) bool { return strings.HasSuffix(th.last, msg) }})
-}
-
-// progressFinish records how the review ended (a deferred call after
-// progressStart): err is handleReview's result.
+// progressFinish records how the review ended (deferred in handleReview,
+// whatever the exit): err is handleReview's result.
 func (r *Reviewer) progressFinish(ctx context.Context, rv *reviewRun, err error) {
 	if ctx.Err() != nil {
 		return // shutting down: the job runs again
 	}
-	same := func(body string) func(*progressThread) bool {
-		return func(th *progressThread) bool { return strings.HasSuffix(th.last, body) }
+	same := func(body string) func(string) bool {
+		return func(last string) bool { return strings.HasSuffix(last, body) }
 	}
 	var rl *core.RetryLater
 	switch {
+	case rv.conflicted:
+		msg := fmt.Sprintf(msgProgressConflct, rv.mr.TargetBranch)
+		r.progressLeave(ctx, rv.job, msg, same(msg))
 	case err == nil && rv.held != "":
 		msg := fmt.Sprintf(msgProgressHeld, rv.held)
-		r.progressApply(ctx, rv.job, progressUpdate{reply: msg, quiet: same(msg)})
+		r.progressLeave(ctx, rv.job, msg, same(msg))
 	case err == nil:
-		msg := fmt.Sprintf(msgProgressDone, mdtext.ShortSHA(rv.head))
-		r.progressApply(ctx, rv.job, progressUpdate{reply: msg, quiet: same(msg), resolve: true})
+		r.progressClear(ctx, rv)
 	case asRetryLater(err, &rl):
 		reason := strings.TrimSuffix(cmpOr(rv.held, rl.Reason), ".")
 		msg := fmt.Sprintf(msgPostponed, r.env.Clock(rl.At), reason)
 		// The time moves on every retry: the same reason is the same state.
-		r.progressApply(ctx, rv.job, progressUpdate{reply: msg, quiet: func(th *progressThread) bool {
-			return strings.HasPrefix(th.last, prefixPostponed) && strings.HasSuffix(th.last, ": "+reason)
-		}})
+		r.progressLeave(ctx, rv.job, msg, func(last string) bool {
+			return strings.HasPrefix(last, prefixPostponed) && strings.HasSuffix(last, ": "+reason)
+		})
 	default:
 		msg := fmt.Sprintf(msgProgressFailed, failReason(ctx, err), r.env.Mention())
-		r.progressApply(ctx, rv.job, progressUpdate{reply: msg, quiet: same(msg)})
+		r.progressLeave(ctx, rv.job, msg, same(msg))
 	}
 }
 

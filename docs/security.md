@@ -344,7 +344,7 @@ CLI не попадает никогда (он стоит в argv `docker run` �
 
 | Клиент | Разрешённые изменяющие запросы |
 |---|---|
-| бот-аккаунт (`GITLAB_TOKEN`) | заметки MR, ответы в обсуждениях, черновики заметок и их публикация, удаление **только** своих черновиков; метки MR (`PUT` MR с телом только `add_labels` / `remove_labels`; Reporter получит 403); реакции (award emoji) на MR и его заметки: добавление и удаление по id (GitLab даёт удалить только свою реакцию, бот снимает только свои — [reactions.md](features/reactions.md)); комментарий к коммиту (`POST /projects/:id/repository/commits/:sha/comments`) — только когда main сломан прямым пушем без MR ([ci.md](features/ci.md#main-ветка)) |
+| бот-аккаунт (`GITLAB_TOKEN`) | заметки MR, ответы в обсуждениях, создание обсуждения (`POST discussions`, тред «ревью не завершено»), черновики заметок и их публикация, удаление **только** своих черновиков и заметок собственного треда «ревью не завершено» (`DELETE notes/:id`; бот передаёт только id своих заметок, а GitLab не даёт Reporter и Developer удалить чужие); метки MR (`PUT` MR с телом только `add_labels` / `remove_labels`; Reporter получит 403); реакции (award emoji) на MR и его заметки: добавление и удаление по id (GitLab даёт удалить только свою реакцию, бот снимает только свои — [reactions.md](features/reactions.md)); комментарий к коммиту (`POST /projects/:id/repository/commits/:sha/comments`) — только когда main сломан прямым пушем без MR ([ci.md](features/ci.md#main-ветка)) |
 | служебный токен | список ревьюеров MR (тело только `reviewer_ids`), метки MR (тело только `add_labels` / `remove_labels`), resolve обсуждений, создание и правка вебхуков проекта |
 | Jira | только чтение |
 

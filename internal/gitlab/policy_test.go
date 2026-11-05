@@ -25,7 +25,7 @@ func TestWriteAllowed(t *testing.T) {
 		{WriteMRComments, "POST", "/projects/1/merge_requests/2/draft_notes", true},
 		{WriteMRComments, "POST", "/projects/1/merge_requests/2/draft_notes/bulk_publish", true},
 		{WriteMRComments, "DELETE", "/projects/1/merge_requests/2/draft_notes/5", true},
-		{WriteMRComments, "DELETE", "/projects/1/merge_requests/2/notes/3", false},
+		{WriteMRComments, "DELETE", "/projects/1/merge_requests/2/notes/3", true},
 		// Everything that changes the repository or the MR itself is refused.
 		{WriteMRComments, "PUT", "/projects/1/merge_requests/2/merge", false},
 		{WriteMRComments, "POST", "/projects/1/merge_requests/2/approve", false},

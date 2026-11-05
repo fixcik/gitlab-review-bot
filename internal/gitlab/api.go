@@ -374,6 +374,31 @@ func (c *Client) UpdateNote(ctx context.Context, projectID, mrIID, noteID int64,
 	return err
 }
 
+// CreateDiscussion starts a general MR thread (resolvable) with a first
+// note. Not retried on 5xx: a repeat could make a second thread.
+func (c *Client) CreateDiscussion(ctx context.Context, projectID, mrIID int64, body string) error {
+	_, err := c.do(ctx, request{
+		method: http.MethodPost,
+		u:      c.endpoint(nil, mrSegs(projectID, mrIID, "discussions")...),
+		body:   bodyReq{Body: body},
+	})
+	return err
+}
+
+// DeleteNote removes an MR note; a note that is already gone (404) is not an
+// error.
+func (c *Client) DeleteNote(ctx context.Context, projectID, mrIID, noteID int64) error {
+	_, err := c.do(ctx, request{
+		method:            http.MethodDelete,
+		u:                 c.endpoint(nil, mrSegs(projectID, mrIID, "notes", id(noteID))...),
+		retryServerErrors: true,
+	})
+	if errors.Is(err, core.ErrNotFound) {
+		return nil
+	}
+	return err
+}
+
 // ReplyToDiscussion adds a note to a discussion. Not retried on 5xx.
 func (c *Client) ReplyToDiscussion(ctx context.Context, projectID, mrIID int64, discussionID, body string) error {
 	_, err := c.do(ctx, request{

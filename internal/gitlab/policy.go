@@ -63,9 +63,10 @@ func WithWrites(p WritePolicy) Option {
 var (
 	// Paths are relative to /api/v4 and use numeric project IDs.
 	mrCommentWriteRe = regexp.MustCompile(`^/projects/\d+/merge_requests/\d+/(` +
-		`notes|notes/\d+|` +
+		`notes|notes/\d+|discussions|` +
 		`discussions/[0-9a-f]+|discussions/[0-9a-f]+/notes|` +
 		`draft_notes|draft_notes/\d+|draft_notes/bulk_publish)$`)
+	mrNoteRe = regexp.MustCompile(`^/projects/\d+/merge_requests/\d+/notes/\d+$`)
 	// awardWriteRe: award emoji of the MR or of one of its notes; POST
 	// adds, DELETE (with an award id) removes.
 	awardWriteRe = regexp.MustCompile(`^/projects/\d+/merge_requests/\d+/(notes/\d+/)?award_emoji(/\d+)?$`)
@@ -97,8 +98,10 @@ func writeAllowed(p WritePolicy, method, path string) bool {
 		case http.MethodPost, http.MethodPut:
 			return true
 		case http.MethodDelete:
-			// Only leftover draft notes are ever deleted.
-			return strings.Contains(path, "/draft_notes/")
+			// Leftover draft notes and a note of the bot's own progress
+			// thread (GitLab refuses other users' notes to a Reporter or
+			// Developer token; the code passes only the bot's note ids).
+			return strings.Contains(path, "/draft_notes/") || mrNoteRe.MatchString(path)
 		}
 	}
 	if p&WriteAwards != 0 && awardWriteRe.MatchString(path) {

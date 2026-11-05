@@ -112,6 +112,8 @@ func TestGitLabMemoInvalidatedByWrites(t *testing.T) {
 	writes := []func(){
 		func() { gl.CreateNote(ctx, reviewtest.PID, reviewtest.IID, "x") },
 		func() { gl.UpdateNote(ctx, reviewtest.PID, reviewtest.IID, 1, "x") },
+		func() { gl.DeleteNote(ctx, reviewtest.PID, reviewtest.IID, 1) },
+		func() { gl.CreateDiscussion(ctx, reviewtest.PID, reviewtest.IID, "x") },
 		func() { gl.ReplyToDiscussion(ctx, reviewtest.PID, reviewtest.IID, "d", "x") },
 		func() { gl.ResolveDiscussion(ctx, reviewtest.PID, reviewtest.IID, "d", true) },
 		func() { gl.DeleteDraftNotes(ctx, reviewtest.PID, reviewtest.IID) },

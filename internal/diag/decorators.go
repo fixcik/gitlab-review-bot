@@ -180,6 +180,20 @@ func (g *GitLab) UpdateNote(ctx context.Context, projectID, mrIID, noteID int64,
 	return err
 }
 
+func (g *GitLab) CreateDiscussion(ctx context.Context, projectID, mrIID int64, body string) error {
+	sctx, p := gitlabStep(ctx, "create_discussion", "POST discussion", Fields{"body_bytes": len(body), "marker": noteMarker(body)})
+	err := g.GitLab.CreateDiscussion(sctx, projectID, mrIID, body)
+	p.done(err, nil)
+	return err
+}
+
+func (g *GitLab) DeleteNote(ctx context.Context, projectID, mrIID, noteID int64) error {
+	sctx, p := gitlabStep(ctx, "delete_note", "DELETE note", Fields{"note_id": noteID})
+	err := g.GitLab.DeleteNote(sctx, projectID, mrIID, noteID)
+	p.done(err, nil)
+	return err
+}
+
 func (g *GitLab) ReplyToDiscussion(ctx context.Context, projectID, mrIID int64, discussionID, body string) error {
 	sctx, p := gitlabStep(ctx, "reply", "POST reply", Fields{"discussion_id": discussionID, "body_bytes": len(body), "marker": noteMarker(body)})
 	err := g.GitLab.ReplyToDiscussion(sctx, projectID, mrIID, discussionID, body)

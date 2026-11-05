@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/fixcik/gitlab-review-bot/internal/core"
@@ -78,7 +79,8 @@ func TestAwardWritePolicy(t *testing.T) {
 		{BotWrites, "POST", "/projects/1/merge_requests/2/award_emoji/4", false},
 		{BotWrites, "PUT", "/projects/1/merge_requests/2/award_emoji/4", false},
 		{BotWrites, "POST", "/projects/1/issues/2/award_emoji", false},
-		{BotWrites, "DELETE", "/projects/1/merge_requests/2/notes/3", false},
+		{BotWrites, "DELETE", "/projects/1/merge_requests/2/notes/3", true},
+		{ServiceWrites, "DELETE", "/projects/1/merge_requests/2/notes/3", false},
 		{WriteMRComments, "POST", "/projects/1/merge_requests/2/award_emoji", false},
 		{ServiceWrites, "POST", "/projects/1/merge_requests/2/notes/3/award_emoji", false},
 	}
@@ -86,5 +88,32 @@ func TestAwardWritePolicy(t *testing.T) {
 		if got := writeAllowed(c.p, c.method, c.path); got != c.want {
 			t.Errorf("writeAllowed(%d, %s %s) = %v, want %v", c.p, c.method, c.path, got, c.want)
 		}
+	}
+}
+
+func TestDeleteNoteAndCreateDiscussion(t *testing.T) {
+	f, c := newFake(t, func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method + " " + r.URL.EscapedPath() {
+		case "DELETE /api/v4/projects/42/merge_requests/7/notes/9":
+			w.WriteHeader(http.StatusNoContent)
+		case "POST /api/v4/projects/42/merge_requests/7/discussions":
+			io.WriteString(w, `{"id":"abc","notes":[{"id":5}]}`)
+		default:
+			http.NotFound(w, r) // including DELETE of a note that is gone
+		}
+	})
+	ctx := context.Background()
+	if err := c.DeleteNote(ctx, 42, 7, 9); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.DeleteNote(ctx, 42, 7, 10); err != nil {
+		t.Fatalf("a note that is gone is not an error: %v", err)
+	}
+	if err := c.CreateDiscussion(ctx, 42, 7, "hello"); err != nil {
+		t.Fatal(err)
+	}
+	last := f.requests()[len(f.requests())-1]
+	if last.Method != http.MethodPost || !strings.Contains(last.Body, `"body":"hello"`) {
+		t.Fatalf("discussion request: %+v", last)
 	}
 }

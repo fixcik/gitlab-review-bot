@@ -76,6 +76,7 @@ func (r *Reviewer) reactsTo(job core.Job) bool {
 func (r *Reviewer) Accepted(next func(core.Job)) func(core.Job) {
 	return func(job core.Job) {
 		r.accepted(job)
+		r.progressQueued(job) // the "review not finished" thread (progress.go)
 		next(job)
 	}
 }
