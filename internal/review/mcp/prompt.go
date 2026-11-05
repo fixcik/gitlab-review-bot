@@ -48,6 +48,9 @@ func (m *Run) SystemNote() string {
 	}
 	b.WriteString("- Submitted findings are published when the review ends, together with your final answer. In the final JSON answer \"findings\" may be an empty array when you submitted all of them; never repeat a submitted finding there. Everything else in the final answer (summary, walkthrough, resolved, ...) is still required.\n")
 	b.WriteString("- If a tool is unavailable or keeps failing, put the findings into the final JSON answer as usual.\n")
+	if m.Has(toolDiagram) {
+		b.WriteString("- Diagram: before you answer, call `validate_diagram` with your Mermaid diagram and fix it until it answers OK; a diagram that does not parse is dropped from the summary.\n")
+	}
 	b.WriteString("- `report_progress` (optional) records the stage you are at for the bot's diagnostics.\n")
 	return b.String()
 }

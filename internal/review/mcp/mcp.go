@@ -13,6 +13,9 @@
 //     migrations evidence, linter duplicates, open threads, the findings
 //     cap; mcp/validate.go) and answers accepted / adjusted / rejected with
 //     reasons. Accepted findings are kept in memory only (mcp/findings.go);
+//   - validate_diagram (review.diagram): the summary diagram checked with
+//     the real Mermaid parser (crossrepo/diagram_check.go), so the model
+//     fixes a syntax error before it answers;
 //   - report_progress: a stage line for the run's diagnostics, and
 //     report_problem (review.problems) for what the model could not verify
 //     (mcp/problems.go).
@@ -85,6 +88,8 @@ type Inputs struct {
 	Lang    string            // the review language
 	// Base is the merge base export as Claude sees it ("" = none).
 	Base string
+	// Diagram: review.diagram is on, the run has validate_diagram.
+	Diagram bool
 }
 
 // Feature serves the bot's own review tools to Claude over MCP during a

@@ -231,3 +231,55 @@ func TestMCPProgressAndListAndWithdraw(t *testing.T) {
 		t.Errorf("findings left: %v", m.Findings())
 	}
 }
+
+func TestMCPValidateDiagram(t *testing.T) {
+	h := reviewtest.New(t)
+	h.Runner.OnExec = func(req core.ExecRequest) *core.ExecResult {
+		if strings.Contains(req.Stdin, "BROKEN") {
+			return &core.ExecResult{ExitCode: 1, Stdout: "Parse error on line 2:\nExpecting 'ACTOR', got 'loop'"}
+		}
+		return &core.ExecResult{}
+	}
+	m := reviewtest.OpenTestMCP(t, h, mcp.Inputs{Diagram: true})
+	call := func(d string) (string, bool) {
+		return reviewtest.CallTool(t, m, mcp.ToolDiagram, map[string]string{"diagram": d})
+	}
+	if text, isErr := call("sequenceDiagram\nA->>B: hi"); isErr || text != "OK" {
+		t.Errorf("good diagram: %q %v", text, isErr)
+	}
+	if text, isErr := call("sequenceDiagram\nA->>B: BROKEN"); isErr || !strings.Contains(text, "INVALID") || !strings.Contains(text, "Parse error on line 2") {
+		t.Errorf("parser error: %q %v", text, isErr)
+	}
+	// The bot's own rules are reported too, without asking the parser.
+	n := len(h.Runner.Execs)
+	if text, _ := call("flowchart TD\nA-->B\nclick A \"x\""); !strings.Contains(text, "INVALID") || !strings.Contains(text, "interaction") {
+		t.Errorf("rule violation: %q", text)
+	}
+	if len(h.Runner.Execs) != n {
+		t.Error("a diagram the rules reject must not reach the parser")
+	}
+	if text, isErr := call(strings.Repeat("a", 20<<10)); !isErr || !strings.Contains(text, "too large") {
+		t.Errorf("size limit: %q %v", text, isErr)
+	}
+}
+
+func TestMCPValidateDiagramParserDown(t *testing.T) {
+	h := reviewtest.New(t) // exec answers 127: no parser in the image
+	m := reviewtest.OpenTestMCP(t, h, mcp.Inputs{Diagram: true})
+	text, isErr := reviewtest.CallTool(t, m, mcp.ToolDiagram, map[string]string{"diagram": "flowchart TD\nA-->B"})
+	if isErr || !strings.Contains(text, "not available") {
+		t.Errorf("parser down: %q %v", text, isErr)
+	}
+}
+
+func TestMCPNoValidateDiagramWhenDiagramOff(t *testing.T) {
+	h := reviewtest.New(t)
+	m := reviewtest.OpenTestMCP(t, h, mcp.Inputs{})
+	if m.Has(mcp.ToolDiagram) || strings.Contains(m.SystemNote(), "validate_diagram") {
+		t.Error("validate_diagram must exist only with the diagram on")
+	}
+	m = reviewtest.OpenTestMCP(t, h, mcp.Inputs{Diagram: true})
+	if !m.Has(mcp.ToolDiagram) || !strings.Contains(m.SystemNote(), "validate_diagram") {
+		t.Error("validate_diagram missing with the diagram on")
+	}
+}

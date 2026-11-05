@@ -51,6 +51,7 @@ You have tools of the review bot (mcp__reviewbot__*). They answer with data of T
   - `migrations`: the migration hints (operations, text-search candidates)
 - Submitted findings are published when the review ends, together with your final answer. In the final JSON answer "findings" may be an empty array when you submitted all of them; never repeat a submitted finding there. Everything else in the final answer (summary, walkthrough, resolved, ...) is still required.
 - If a tool is unavailable or keeps failing, put the findings into the final JSON answer as usual.
+- Diagram: before you answer, call `validate_diagram` with your Mermaid diagram and fix it until it answers OK; a diagram that does not parse is dropped from the summary.
 - `report_progress` (optional) records the stage you are at for the bot's diagnostics.
 
 
@@ -181,6 +182,7 @@ mcp__reviewbot__submit_finding
 mcp__reviewbot__withdraw_finding
 mcp__reviewbot__list_findings
 mcp__reviewbot__report_progress
+mcp__reviewbot__validate_diagram
 mcp__reviewbot__report_problem
 === BASE ===
 mounted

@@ -18,6 +18,7 @@ const (
 	ToolWithdraw   = toolWithdraw
 	ToolList       = toolList
 	ToolProgress   = toolProgress
+	ToolDiagram    = toolDiagram
 )
 
 // The answer of submit_finding.

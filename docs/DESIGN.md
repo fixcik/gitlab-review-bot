@@ -1858,7 +1858,9 @@ ends.
   with usages, phase B facts, and the whole map's entries restricted to this
   repository and the repositories mounted for the run), `migrations`, `task`,
   `related_repos`, plus `submit_finding`, `withdraw_finding`, `list_findings`,
-  `report_progress` and (with `review.problems`) `report_problem`. Repository-derived text is wrapped in `<untrusted_…>`
+  `report_progress`, (with `review.diagram`) `validate_diagram` (the Mermaid parser in the
+  sandbox image over the same `sanitizeDiagram` rules the final gate applies) and (with
+  `review.problems`) `report_problem`. Repository-derived text is wrapped in `<untrusted_…>`
   tags with `untrusted()`; secrets are never shown; path arguments must be
   clean relative paths.
 - **Prompt switch.** With MCP on, the API changelog, linter results,

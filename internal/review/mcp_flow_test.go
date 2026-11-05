@@ -17,7 +17,7 @@ func TestMCPPromptSwitch(t *testing.T) {
 		t.Fatalf("RunRequest.MCP = %v", req.MCP)
 	}
 	tools := strings.Join(req.MCP.Tools, ",")
-	if tools != "diff_lines,api_changes,lint_findings,coverage,map_lookup,migrations,submit_finding,withdraw_finding,list_findings,report_progress,report_problem" {
+	if tools != "diff_lines,api_changes,lint_findings,coverage,map_lookup,migrations,submit_finding,withdraw_finding,list_findings,report_progress,validate_diagram,report_problem" {
 		t.Errorf("tools %s", tools)
 	}
 	for _, s := range []string{

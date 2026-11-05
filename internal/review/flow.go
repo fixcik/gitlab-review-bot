@@ -410,7 +410,7 @@ func (rv *reviewRun) routeInput() routeInput {
 
 func (rv *reviewRun) mcpInputs() mcp.Inputs {
 	return mcp.Inputs{Checkout: rv.co, Files: rv.files, API: rv.api, CompatOn: rv.cr != nil, Lint: rv.lr, Coverage: rv.cov,
-		Sysmap: rv.sm, SysmapDeps: rv.smDeps, Migrations: rv.mg, Task: rv.tc, Repos: rv.rc, Threads: rv.threads, Lang: rv.lang, Base: rv.bs.Root}
+		Sysmap: rv.sm, SysmapDeps: rv.smDeps, Migrations: rv.mg, Task: rv.tc, Repos: rv.rc, Threads: rv.threads, Lang: rv.lang, Base: rv.bs.Root, Diagram: rv.eff.Diagram}
 }
 
 // reviewRunFailed ends a review whose Claude run failed: a rate limit
