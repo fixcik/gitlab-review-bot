@@ -12,6 +12,9 @@ import (
 const (
 	GateBlockedPrefix = "⛔ **Мерж заблокирован:**"
 	GateClearLine     = "✅ Блокирующих замечаний нет."
+	// GateUnreviewedLine replaces GateClearLine while the current head is not
+	// reviewed (merge conflict): "no blocking threads" would read as approval.
+	GateUnreviewedLine = "⏳ Последние изменения не проверены; блокирующих замечаний по прежним коммитам нет."
 )
 
 // GateLine is the merge-gate line of the summary: "⛔ **Мерж
@@ -35,10 +38,13 @@ func GateLine(blockingOpen, fixedPending int) string {
 // SetGateLine replaces the merge-gate line of an existing summary body
 // with line; ok is false when the body has no gate line.
 func SetGateLine(body, line string) (string, bool) {
+	if line == GateClearLine && strings.Contains(body, "\n"+GateUnreviewedLine) {
+		return body, true // only a new review of the head lifts it
+	}
 	lines := strings.Split(body, "\n")
 	found := false
 	for i, l := range lines {
-		if t := strings.TrimSpace(l); strings.HasPrefix(t, GateBlockedPrefix) || t == GateClearLine {
+		if t := strings.TrimSpace(l); strings.HasPrefix(t, GateBlockedPrefix) || t == GateClearLine || t == GateUnreviewedLine {
 			lines[i], found = line, true
 		}
 	}
@@ -46,4 +52,16 @@ func SetGateLine(body, line string) (string, bool) {
 		return body, false
 	}
 	return strings.Join(lines, "\n"), true
+}
+
+// MarkUnreviewed turns the "no blocking threads" gate line of a summary into
+// GateUnreviewedLine (a summary without that line is returned as it is).
+func MarkUnreviewed(body string) string {
+	lines := strings.Split(body, "\n")
+	for i, l := range lines {
+		if strings.TrimSpace(l) == GateClearLine {
+			lines[i] = GateUnreviewedLine
+		}
+	}
+	return strings.Join(lines, "\n")
 }

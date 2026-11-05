@@ -93,7 +93,7 @@ func (r *Reviewer) reviewConflict(ctx context.Context, rv *reviewRun) (done bool
 	if body == "" {
 		body = marker.Summary(rv.head) + "\n" + summary.Title + "\n\n" + block + "\n"
 	} else {
-		body = summary.SwapBlock(body, block, marker.ConflictRe, afterTitle)
+		body = summary.MarkUnreviewed(summary.SwapBlock(body, block, marker.ConflictRe, afterTitle))
 	}
 	summaryID := threads.SummaryID
 	if body != threads.SummaryBody {
