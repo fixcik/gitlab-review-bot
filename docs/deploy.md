@@ -90,6 +90,7 @@ read-only корнем, tmpfs на `/tmp` и `$HOME`, клон MR — в `/work`
 | buf | `BUF_VERSION=1.75.0` (npm) | совместимость proto |
 | graphql-inspector | `GRAPHQL_INSPECTOR_VERSION=7.0.2`, `graphql@16.11.0` | совместимость GraphQL |
 | gitleaks | `GITLEAKS_VERSION=8.30.0` (sha256) | секреты во всех коммитах MR — единственный сканер, который бот запускает сам |
+| mermaid, jsdom | `MERMAID_VERSION=11.16.1`, `JSDOM_VERSION=30.1.3` (npm, без install-скриптов, в `/opt/mermaid-check`) | проверка синтаксиса Mermaid-схемы саммари (`tools/mermaid-check/check.mjs`), см. [review.md](features/review.md#схема-изменений) |
 
 oasdiff и gitleaks скачиваются и проверяются в отдельной стадии `fetch`: `curl` в
 итоговый образ не попадает. Go нужен только стадии сборки `oas2to3`.

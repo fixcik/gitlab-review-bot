@@ -30,7 +30,7 @@ flowchart LR
 
     subgraph host["Хост бота"]
         bot["<b>reviewbot serve</b><br/>токены GitLab и Jira только здесь<br/>SQLite, очередь"]
-        exec["<b>exec-контейнер</b><br/>--network none, без токенов<br/>gitleaks, compat"]
+        exec["<b>exec-контейнер</b><br/>--network none, без токенов<br/>gitleaks, compat, парсер Mermaid"]
         claude["<b>claude-контейнер</b><br/>токен Claude по имени<br/>/work: клон MR<br/>/base: код до MR (ro)<br/>/repos/*: другие репозитории (ro)<br/>только Read, Grep, Glob: без Bash и команд"]
         subgraph net["docker network reviewbot-sandbox (internal: true)"]
             egress["<b>egress</b><br/>:3128 прокси, :8091 MCP"]
@@ -66,7 +66,7 @@ flowchart LR
   443 — через egress (хост добавляется в разрешённые только с этим флагом), http —
   напрямую, приёмник должен быть в сети песочницы ([ниже](#трейсинг)).
 - Сетевых контейнеров без egress больше нет (setup-команды удалены).
-- gitleaks и проверки совместимости — `--network none`.
+- gitleaks, проверки совместимости и парсер Mermaid — `--network none`.
 - **Линтеры бот не запускает.** Раньше phpstan, phpcs, eslint, golangci-lint, ruff,
   semgrep и команды `lint.custom` исполнялись в песочнице на коде MR — а с ними и
   код репозитория (конфиги ESLint и PHPStan с расширениями, автозагрузчик Composer,
@@ -219,7 +219,7 @@ socat, `sandbox.allow_unsandboxed_bash`), кэшей в клоне, Composer, ma
 инструмента `diffcov` в образе, а также Go, PHP и Python. Всё это удалено:
 исполнять код репозитория нечем, поэтому прятать от него токен Claude, закрывать ему
 сеть и запрещать запись тоже не нужно; остаётся закрыть чтение (область выше). В
-образе песочницы — node, Claude Code, ripgrep, git, gitleaks и проверки совместимости
+образе песочницы — node, Claude Code, ripgrep, git, gitleaks, проверки совместимости и парсер Mermaid
 ([deploy.md](deploy.md#образы)).
 
 ### MCP-сервер бота (граница песочница → бот)
@@ -463,7 +463,8 @@ CLI не попадает никогда (он стоит в argv `docker run` �
   попадает), но изоляции нет вовсе.
 - **Исполняются только проверки бота.** gitleaks, oasdiff, oas2to3, buf и
   graphql-inspector работают в exec-контейнере (`--network none`, без токенов) на
-  данных MR (`.git`, спецификации), но сами они — программы из образа; кода
+  данных MR (`.git`, спецификации), парсер Mermaid (`mermaid.parse`) — на тексте
+  схемы, который написала модель (stdin, без каталога MR), но сами они — программы из образа; кода
   репозитория бот не запускает (`compat.commands`, `lint.custom`, `setup`, `tools`
   удалены).
 - **Код уходит в Anthropic.** Это суть работы бота, включая код
