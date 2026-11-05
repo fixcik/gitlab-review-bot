@@ -79,7 +79,7 @@ func (r *Reviewer) postSummary(ctx context.Context, rv *reviewRun, t *reviewTall
 	sd.TaskSection += pathSummaryLine(rv.paths) + rv.sg.summaryLine(r.env.Mention()) + r.learning.AfterReviewOutcomes(ctx, job, mr, eff, rv.co)
 	sd.TaskSection += r.learning.FinishReviewMemory(ctx, job, eff, rv.mem, rv.head)
 	sd.TaskSection += rv.rc.MissingSection() // context.related that could not be provided
-	sd.TaskSection = crossrepo.DiagramSection(log, eff, rv.out, rv.threads.SummaryBody, rv.incremental) + sd.TaskSection
+	sd.TaskSection = crossrepo.DiagramSection(ctx, log, eff, r.crossrepo.DiagramChecker(), rv.out, rv.threads.SummaryBody, rv.incremental) + sd.TaskSection
 	// Trunk-based status (pipeline/tbd.go): size, age, behind target, pipeline.
 	ts := r.pipeline.CollectTBD(ctx, job, mr, eff)
 	// Automatic MR labels (review/labels; never fail the review): before the

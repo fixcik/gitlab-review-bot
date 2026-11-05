@@ -3,10 +3,12 @@ package crossrepo
 // Mermaid diagram of the change in the summary note ("🗺 Схема изменений").
 // Claude returns raw Mermaid in ReviewOutput.Diagram; the bot validates it
 // (allowed diagram types, no interaction/links/directives/HTML, size caps)
-// and renders it as a ```mermaid block, which GitLab renders natively. An
+// and renders it as a ```mermaid block, which GitLab renders natively. The
+// Mermaid parser (diagram_check.go) has the last word on the syntax. An
 // invalid diagram is dropped (logged) and never fails the review.
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -185,8 +187,10 @@ func previousDiagram(body string) string {
 
 // DiagramSection decides which diagram goes into the summary: Claude's
 // (validated); on an incremental review without a (valid) new one, the
-// previous summary's. Disabled -> "".
-func DiagramSection(log *slog.Logger, eff config.Effective, out *output.ReviewOutput, prevSummary string, incremental bool) string {
+// previous summary's. The diagram to render must also parse with Mermaid's
+// own parser (chk; nil = not checked): one that does not is dropped, while a
+// parser that cannot run (error) keeps the diagram. Disabled -> "".
+func DiagramSection(ctx context.Context, log *slog.Logger, eff config.Effective, chk DiagramChecker, out *output.ReviewOutput, prevSummary string, incremental bool) string {
 	if !eff.Diagram || out == nil {
 		return ""
 	}
@@ -197,6 +201,16 @@ func DiagramSection(log *slog.Logger, eff config.Effective, out *output.ReviewOu
 	}
 	if d == "" && incremental {
 		d = previousDiagram(prevSummary)
+	}
+	if d != "" && chk != nil {
+		msg, cerr := chk.Check(ctx, d)
+		switch {
+		case cerr != nil:
+			log.Warn("review: diagram not parsed, kept as is", "err", cerr)
+		case msg != "":
+			log.Warn("review: diagram rejected by the mermaid parser", "err", msg)
+			d = ""
+		}
 	}
 	return renderDiagramSection(d)
 }

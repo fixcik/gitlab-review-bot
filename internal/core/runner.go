@@ -219,7 +219,9 @@ type ExecRequest struct {
 	// Command is the argv; Command[0] is looked up in PATH.
 	Command []string
 	// Env are extra NAME=value pairs. Credential names are refused.
-	Env     []string
+	Env []string
+	// Stdin is fed to the program's standard input ("" = none).
+	Stdin   string
 	Timeout time.Duration
 }
 

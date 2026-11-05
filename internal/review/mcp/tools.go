@@ -10,6 +10,7 @@ import (
 
 	"github.com/fixcik/gitlab-review-bot/internal/mcpserver"
 	"github.com/fixcik/gitlab-review-bot/internal/review/compatcheck"
+	"github.com/fixcik/gitlab-review-bot/internal/review/crossrepo"
 	"github.com/fixcik/gitlab-review-bot/internal/review/finding"
 	"github.com/fixcik/gitlab-review-bot/internal/review/mdtext"
 	"github.com/fixcik/gitlab-review-bot/internal/review/migcheck"
@@ -30,6 +31,7 @@ const (
 	toolWithdraw   = "withdraw_finding"
 	toolList       = "list_findings"
 	toolProgress   = "report_progress"
+	toolDiagram    = "validate_diagram"
 )
 
 const (
@@ -122,10 +124,43 @@ func (m *Run) Tools() []mcpserver.Tool {
 			InputSchema: json.RawMessage(`{"type":"object","additionalProperties":false,"required":["stage"],"properties":{"stage":{"type":"string","maxLength":60,"description":"Short stage name, e.g. reading-diff, checking-consumers, writing-answer."},"note":{"type":"string","maxLength":300}}}`),
 			Description: "Optional: record the review stage you are at (bot diagnostics only; nothing is posted)."},
 	)
+	if in.Diagram { // review.diagram: the summary diagram
+		ts = append(ts, mcpserver.Tool{Name: toolDiagram, Handler: m.validateDiagram,
+			InputSchema: json.RawMessage(`{"type":"object","additionalProperties":false,"required":["diagram"],"properties":{"diagram":{"type":"string","maxLength":` + fmt.Sprint(maxDiagramArg) + `,"description":"The Mermaid source exactly as it would go into the \"diagram\" field of the answer."}}}`),
+			Description: "Check the Mermaid diagram of the summary with the real Mermaid parser and the bot's rules. Answers OK, or the problem (line and message) to fix before you answer. A diagram that does not pass is dropped from the summary."})
+	}
 	if m.f.env.Cfg.Review.Problems.Enabled { // review.problems.enabled
 		ts = append(ts, m.reportProblemTool()) // what the model could not verify
 	}
 	return ts
+}
+
+// maxDiagramArg caps the diagram argument of validate_diagram.
+const maxDiagramArg = 16 << 10
+
+type diagramArgs struct {
+	Diagram string `json:"diagram"`
+}
+
+// validateDiagram is validate_diagram: OK, or why the diagram is not fit.
+func (m *Run) validateDiagram(ctx context.Context, raw json.RawMessage) (string, error) {
+	var a diagramArgs
+	if err := mcpserver.DecodeArgs(raw, &a); err != nil {
+		return "", err
+	}
+	if len(a.Diagram) > maxDiagramArg {
+		return "", fmt.Errorf("diagram is too large (%d bytes, at most %d)", len(a.Diagram), maxDiagramArg)
+	}
+	problem, err := crossrepo.CheckDiagram(ctx, m.f.crossrepo.DiagramChecker(), a.Diagram)
+	switch {
+	case err != nil:
+		m.log.Warn("review: mcp validate_diagram: parser unavailable", "err", err)
+		return "The Mermaid parser is not available now, so the syntax was not checked. Keep to the diagram rules and answer.", nil
+	case problem != "":
+		m.log.Info("review: mcp validate_diagram: invalid", "problem", mdtext.Shorten(problem, 300))
+		return "INVALID:\n" + problem + "\nFix the diagram and call validate_diagram again.", nil
+	}
+	return "OK", nil
 }
 
 type progressArgs struct {

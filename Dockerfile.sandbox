@@ -9,7 +9,9 @@
 #     state);
 #   - exec: the bot's deterministic checkers with --network none and no
 #     credentials: gitleaks (secrets; git for the MR commits) and the compat
-#     checkers oasdiff, oas2to3, buf, graphql-inspector.
+#     checkers oasdiff, oas2to3, buf, graphql-inspector, and the Mermaid
+#     syntax check of the summary diagram (mermaid + jsdom under
+#     /opt/mermaid-check; stdin only, nothing is rendered).
 # Nothing in the image is there for the model or the repository to run: no
 # language runtimes or build toolchains (Go, PHP, Python, make/gcc), no
 # Composer, no linters (their results come from CI reports, lint.ci), no
@@ -101,6 +103,21 @@ RUN set -eu; \
 # repositories' CI reports (lint.ci, docs/features/lint.md).
 COPY --from=fetch /out/gitleaks /usr/local/bin/gitleaks
 RUN gitleaks version
+
+# Mermaid syntax check (run by the bot with --network none, no credentials;
+# see internal/review/crossrepo/diagram_check.go): the real Mermaid parser
+# (mermaid.parse) over a jsdom document, so a diagram that GitLab would not
+# render is caught before it is posted. Exact versions, no install scripts;
+# the script is tools/mermaid-check/check.mjs.
+ARG MERMAID_VERSION=11.16.1
+ARG JSDOM_VERSION=30.1.3
+COPY tools/mermaid-check/check.mjs /opt/mermaid-check/check.mjs
+RUN set -eu; \
+    cd /opt/mermaid-check; \
+    npm install --no-save --no-package-lock --omit=dev --ignore-scripts --no-audit --no-fund "mermaid@${MERMAID_VERSION}" "jsdom@${JSDOM_VERSION}"; \
+    npm cache clean --force; \
+    printf 'flowchart TD\nA-->B\n' | node check.mjs; \
+    rc=0; printf 'sequenceDiagram\nA->>Loop: x\n' | node check.mjs >/dev/null || rc=$?; test "$rc" -eq 1
 
 # Mount points. HOME is a tmpfs at runtime; mode 1777 so any uid can write
 # when it is not (e.g. manual `docker run` without tmpfs).
