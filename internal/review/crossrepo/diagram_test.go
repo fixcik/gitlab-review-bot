@@ -19,6 +19,8 @@ func TestSanitizeDiagramRejects(t *testing.T) {
 		"href":           "flowchart TD\n  a --> b\n  a href b",
 		"link":           "sequenceDiagram\n  participant A\n  link A: Dashboard @ https://x",
 		"links":          "sequenceDiagram\n  participant A\n  links A: {\"x\": \"y\"}",
+		"keyword actor":  "sequenceDiagram\n  participant Loop as Poller\n  Loop->>PR: x",
+		"keyword end":    "sequenceDiagram\n  PR-->>Loop: x",
 		"init":           "%%{init: {'securityLevel': 'loose'}}%%\nflowchart TD\n  a --> b",
 		"init later":     "flowchart TD\n  %%{init: {}}%%\n  a --> b",
 		"script":         "flowchart TD\n  a[\"<script>alert(1)</script>\"] --> b",
