@@ -76,6 +76,22 @@ func (r *Reviewer) dismissThread(ctx context.Context, job core.Job, disc *core.D
 	return true, r.env.Reply(ctx, job, fmt.Sprintf(msg, job.Username))
 }
 
+// refreshGateAfterReply re-renders the merge-gate line of the summary when a
+// reply landed in a bot thread that is resolved by now: a person closes a
+// blocking thread (a lint finding, a secret) in the GitLab UI, which sends no
+// event, and the reply is the only moment the bot sees it. Best effort, no
+// Claude; the line is rewritten only when it changed.
+func (r *Reviewer) refreshGateAfterReply(ctx context.Context, job core.Job) {
+	disc, err := r.env.GitLab.GetDiscussion(ctx, job.ProjectID, job.MRIID, job.DiscussionID)
+	if err != nil || disc == nil || !disc.Resolved || len(disc.Notes) == 0 || !r.env.IsBotNote(disc.Notes[0]) {
+		return
+	}
+	if t, err := r.scanSummary(ctx, job); err == nil && t.SummaryID != 0 {
+		gate, fixedPending := linters.GateCount(t)
+		r.updateSummaryGate(ctx, job, t, summary.GateLine(gate, fixedPending))
+	}
+}
+
 // unblockBody is the first note of a blocking finding thread after the
 // blocking was lifted: no blocking marker, and the "blocks the merge" line
 // says who lifted it.
