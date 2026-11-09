@@ -241,7 +241,9 @@ func (r *Reviewer) Handle(ctx context.Context, job core.Job) (err error) {
 	case core.JobRefreshStatus:
 		return r.pipeline.HandleRefreshStatus(ctx, job) // pipeline/tbd.go: no Claude, no limits
 	case core.JobThreadReply:
-		return r.learning.HandleThreadReply(ctx, job)
+		err := r.learning.HandleThreadReply(ctx, job)
+		r.refreshGateAfterReply(ctx, job)
+		return err
 	case core.JobRules:
 		return r.learning.HandleRules(ctx, job)
 	case core.JobPause, core.JobResume, core.JobIgnore, core.JobResolveAll, core.JobConfig:

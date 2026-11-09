@@ -821,3 +821,28 @@ func TestThreadReplyDismissLiftsBlocking(t *testing.T) {
 		t.Fatalf("someone else's thread: %v %v", h.GL.Resolved, h.GL.UpdatedNotes)
 	}
 }
+
+func TestThreadReplyRepeatedRuleRefreshesKnownOne(t *testing.T) {
+	h := reviewtest.NewLearnHarness(t, nil)
+	h.GL.Discussions = []core.Discussion{reviewtest.DisagreementThread()}
+	h.Runner.Resps = []reviewtest.RunResp{
+		{Out: reviewtest.LearnJSON(t, true, "Не считай тестовые заглушки ключей секретами.", "project")},
+		{Out: reviewtest.MustJSON(t, learning.ExtractOutput{Learn: true, Rule: "Не требуй отзыва заглушек ключей в тестах.", Scope: "global", Reason: "причина", DuplicateOf: 1})},
+	}
+	for _, note := range []int64{20, 21} {
+		h.GL.Discussions[0].Notes = append(h.GL.Discussions[0].Notes[:1], core.Note{ID: note, AuthorID: reviewtest.UserID, AuthorUsername: "bob", Body: "это тестовая заглушка, не секрет"})
+		if err := h.R().Handle(context.Background(), reviewtest.ReplyJob(note)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if p := h.Runner.Reqs[1].Prompt; !strings.Contains(p, "#1 Не считай тестовые заглушки ключей секретами.") {
+		t.Fatalf("known rules are not in the prompt:\n%s", p)
+	}
+	rs := rules(t, h.Db, "group/api")
+	if len(rs) != 1 || rs[0].Text != "Не считай тестовые заглушки ключей секретами." || rs[0].Scope != learn.ScopeProject || rs[0].SourceNoteID != 21 {
+		t.Fatalf("a repeated rule must refresh the known one, got %+v", rs)
+	}
+	if b := reviewtest.LastReply(t, h.GL).Body; !strings.HasPrefix(b, "🧠 Уже знаю, обновил #1") {
+		t.Fatalf("reply %q", b)
+	}
+}
